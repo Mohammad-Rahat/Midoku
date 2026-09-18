@@ -12,7 +12,19 @@ inline titles with toolbar actions beside them; the extra Settings intro row is 
 SQLite transactions migrate the previous settings JSON without deleting it. Full
 library backup v2 includes covers and composition while retaining v1 import support.
 See [library behavior and limits](library.md) for the implementation and remaining work.
-Native CI validation and simulator visual review are recorded after the build.
+[Native build 35394737018](https://github.com/Mohammad-Rahat/Midoku/actions/runs/35394737018)
+passed 45 Swift tests in ten suites and archived the Release IPA with Xcode 27.0
+(27A266a). Typechecking, bundling and all 16 Node tests also passed. Debug simulator
+screenshots of Library, mixed-source Entry and Settings were inspected: compact
+headers, adjacent actions, category/search controls and chapter rows render correctly.
+No automated touch-flow or physical-device/LiveContainer installation test was run.
+
+Delivered unsigned IPA from commit `4c9c36dc3cc36a5fedd4853079eeb496f664a158`,
+4,161,072 bytes, SHA-256
+`e8df51409a1fe423cc95f340333f94c43d131ad84fb2fb97145e1ad935543606`.
+Deployment remains iOS 27; existing signing settings are unchanged. Native warnings
+remain in the pre-existing extension-registry default initializer and UIScreen.main
+usage; there are no archive errors.
 
 
 ## 2026-09-18 (UTC) — Direct main delivery and IPA build
