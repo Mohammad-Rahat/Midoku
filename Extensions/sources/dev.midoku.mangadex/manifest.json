@@ -1,0 +1,8 @@
+{
+  "id": "dev.midoku.mangadex",
+  "name": "MangaDex",
+  "version": "0.1.0",
+  "contractVersion": 1,
+  "domains": ["api.mangadex.org", "mangadex.org", "uploads.mangadex.org", "*.mangadex.network"],
+  "capabilities": ["search", "feeds", "details", "chapters", "pages"]
+}

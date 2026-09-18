@@ -1,0 +1,15 @@
+{
+  "result": "ok",
+  "baseUrl": "https://node-a.region.mangadex.network/token",
+  "chapter": {
+    "hash": "fixture-hash",
+    "data": [
+      "1-first.jpg",
+      "2-second.png"
+    ],
+    "dataSaver": [
+      "1-small.jpg",
+      "2-small.jpg"
+    ]
+  }
+}

@@ -6,7 +6,7 @@
 >
 > App name: **Midoku**, selected by the user. Use this name consistently in the app and project documentation. This document is self-contained; design files are helpful references, not prerequisites for starting.
 >
-> **2026-09-18 extension decision:** use the versioned TypeScript/JavaScriptCore adapter foundation and shared native WebKit verification flow described in `../docs/extension-architecture.md`. MangaDex and Comix are the first planned live extensions, to be implemented later. See `../docs/progress.md` for actual completion; the full plan below is not yet implemented.
+> **2026-09-18 extension decision:** use the versioned TypeScript/JavaScriptCore adapter foundation and shared native WebKit verification flow described in `../docs/extension-architecture.md`. MangaDex is now bundled for testing; Comix remains planned. See `../docs/progress.md` for actual completion; the full plan below is not yet implemented.
 
 ## 1. Instructions to the implementation agent
 
@@ -1299,7 +1299,7 @@ Documentation must explain:
 | App icon and wordmark | Approved Midoku book icon imported; native system-font wordmark supplied | Validate final release icon presentation |
 | Minimum iOS version | iOS 17 planning target | Dependency/toolchain selection |
 | Distribution route | Build locally; do not claim App Store eligibility | Production remote extension runtime and release |
-| First real sources | MangaDex and Comix selected; implement later after domain/API verification | Real-source acceptance/release |
+| First real sources | MangaDex bundled for testing after API verification; Comix remains planned | Real-source acceptance/release |
 | iPad-specific layout | Keep layouts adaptive, optimize iPhone first | Declaring polished iPad support |
 | Additional repositories | Our maintained repository only | Third-party extension ecosystem |
 | Backup encryption | Clearly described local export without a separate custom encryption scheme | If user explicitly requests encrypted portable backups |

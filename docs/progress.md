@@ -1,5 +1,69 @@
 # Development progress
 
+## 2026-09-18 — Bundled MangaDex testing adapter
+
+### Implemented
+
+- `Extensions/sources/dev.midoku.mangadex/`: contract-1 TypeScript adapter for search,
+  latest/popular/recent feeds, details, paginated chapters, and ordered original-quality
+  image descriptors. English, safe/suggestive defaults; no login or settings API.
+- Stable MangaDex UUIDs, exact chapter number strings, source-page ordinals, validated
+  cursors and payloads, and filtering of external/unavailable/empty chapters.
+- Reviewed `*.domain` permissions for API-assigned MangaDex CDN hosts. Exact domains
+  still match exactly; wildcard matching requires a label boundary and does not
+  permit the root, lookalike hosts, arbitrary ports, or local addresses.
+- `Extensions/bundled.json` selects adapters for app inclusion. The build generates
+  `BundledExtensionResources.swift`; native registration decodes and validates the
+  embedded manifest/bundle without source-specific UI code. Unselected sources are
+  not activated. Node dependencies and `dist/` remain ignored.
+- Synthetic shared parser fixtures, Node checks, native JavaScriptCore integration
+  checks, a manual opt-in live API/image smoke script, and updated authoring/source
+  documentation. Aidoku's MangaDex source was consulted at a pinned revision;
+  this adapter is a separate Midoku TypeScript implementation.
+
+### Verified
+
+- `npm ci` and `npm test`: typechecking, bundling, and all 12 Node checks pass.
+- 17 Swift Testing checks pass, including all six MangaDex methods through the same
+  generated bundle used by the app, resource consistency, and permission boundaries.
+- Xcode BuildProject succeeds. Existing extension runtime/registry actor-isolation
+  warnings remain; no source-specific build errors were reported.
+- Manual Node live smoke: three feed descriptors, 20 popular items, 20 search results,
+  details, a readable English chapter, 52 ordered page descriptors, and one actual
+  1,778,558-byte image response in seven requests. No responses/images were saved.
+  This verifies adapter/API behavior, not the native reader/session pipeline.
+- iPhone 16 Pro Max / iOS 27.0 simulator: MangaDex 0.1.0 is available, adding a
+  connection enables Browse search, and “Yotsuba” returns live titles. Loading ends
+  normally, and the connection persists after reinstall/relaunch. No crash, layout
+  issue, or challenge was observed. Original destination restored; session closed.
+
+### Scope and remaining checks
+
+MangaDex is available for testing through Settings → Extensions → Add, then Browse.
+The current UI displays the first search page; details, feed, reader, and search
+pagination screens remain app milestones even though their adapter methods work.
+No real Cloudflare challenge was solved, and physical-device protected-source
+metadata/image session continuity remains unverified. Comix is not implemented.
+The source notes record language/content defaults, the 10,000-result API window,
+rate-limit behavior, and live test commands.
+
+
+## 2026-09-18 — Extension author guide
+
+Expanded `Extensions/README.md` into the contract-1 authoring reference and linked
+it from the root README. It covers scaffolding, manifest validation, every method
+and returned data shape, stable identities, pagination, host networking and
+Cloudflare verification, runtime limits, manual bundled registration, tests, and
+release troubleshooting. Planned APIs are distinguished from implemented ones.
+
+The documented search adapter, manifest, and two Node tests were extracted and
+run in an isolated temporary project using the real scaffold and build tools.
+Typechecking, bundling, and all six Node checks (four existing plus the two example
+checks) passed. Documentation file links and `git diff --check` also passed.
+No live adapter was added. Swift tests and an Xcode build were not rerun for this
+documentation-only change; the examples do not establish live source or Cloudflare
+compatibility.
+
 ## 2026-09-18 — Brand assets and UI references
 
 Imported the supplied Midoku asset pack and retained the supplied manga reader

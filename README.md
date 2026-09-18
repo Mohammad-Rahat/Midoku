@@ -12,7 +12,8 @@ and iOS 27.2 deployment setting are preserved.
 The app currently has the five-tab navigation shell and a source-independent extension
 foundation. Settings → Extensions manages registered bundled sources. In Debug builds,
 Settings → Extension Lab runs the two offline TypeScript fixtures through JavaScriptCore.
-There are no live sources or remote extension installer yet.
+MangaDex is bundled for testing: add it in Settings → Extensions, then search from
+Browse → MangaDex. There is no remote extension installer yet.
 
 The supplied [UI design kit and Midoku brand assets](docs/design/README.md) are
 stored in the repository. The app uses their icon, adaptive palette, and empty-state
@@ -20,8 +21,12 @@ illustrations. The rest of the kit guides later product-plan screens.
 
 ## Extension authoring
 
-See [the author guide](Extensions/README.md) and [the architecture decision](docs/extension-architecture.md).
-MangaDex and Comix are reserved as the first live adapters; neither is implemented.
+Start with the [extension author guide](Extensions/README.md): setup, manifest rules,
+every method and data shape, a complete search example with offline tests, Cloudflare
+handling, and registration in the app. See [the architecture decision](docs/extension-architecture.md)
+for host boundaries and future distribution work.
+See the [MangaDex adapter notes](Extensions/sources/dev.midoku.mangadex/README.md)
+for defaults, live checks, and current UI limits. Comix remains unimplemented.
 
 ## Checks
 

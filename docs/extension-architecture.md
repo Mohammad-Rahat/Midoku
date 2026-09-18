@@ -3,8 +3,8 @@
 Status: accepted for the development foundation, 2026-09-18.
 
 The user delegated the extension architecture decision and identified Cloudflare
-handling as crucial. MangaDex and Comix are the first planned production adapters,
-to be implemented later. This decision refines plan sections 4 and 17; it does not
+handling as crucial. MangaDex is now bundled for development testing; Comix remains
+planned. See the source notes and progress log for live-verification limits. This decision refines plan sections 4 and 17; it does not
 mark later plan phases as complete.
 
 ## Choice
@@ -60,7 +60,9 @@ subscriptions, and a central bypass backend are not part of this design.
 ## Trust and distribution
 
 For this milestone the executable catalogue consists solely of reviewed app-bundled
-code. The production list is empty; fixture bundles are compiled only under DEBUG.
+code. The explicit review list in `Extensions/bundled.json` currently selects MangaDex.
+The build embeds selected manifests/bundles into checked-in Swift resources;
+creating an adapter alone does not activate it. Offline A/B fixtures remain DEBUG-only.
 There is no arbitrary URL/import UI and no unauthenticated remote executable loading.
 
 Before remotely updated packages: choose the distribution route, authenticate
@@ -70,7 +72,8 @@ rotation and rollback. Permissions must not expand silently.
 
 JavaScriptCore isolation is a concurrency boundary, not protection from hostile
 code. Swift task cancellation does not interrupt synchronous infinite JavaScript.
-The host validates exact declared domains and rejects literal local/private
+The host validates exact declared domains or reviewed leading `*.domain`
+subdomain scopes, with label-boundary matching, and rejects literal local/private
 addresses; DNS rebinding and a hostile publisher are not solved by those checks.
 Arbitrary third-party packages remain out of scope until stronger guarantees exist.
 

@@ -1,0 +1,49 @@
+{
+  "result": "ok",
+  "response": "collection",
+  "data": [
+    {
+      "id": "00000001-1111-4111-8111-000000000001",
+      "type": "manga",
+      "attributes": {
+        "title": {
+          "ja-ro": "Test Atlas",
+          "en": "The Test Atlas"
+        },
+        "altTitles": [],
+        "description": {
+          "en": "Synthetic API fixture for Midoku."
+        },
+        "originalLanguage": "ja"
+      },
+      "relationships": [
+        {
+          "id": "00000090-1111-4111-8111-000000000090",
+          "type": "cover_art",
+          "attributes": {
+            "fileName": "test-cover.jpg"
+          }
+        }
+      ]
+    },
+    {
+      "id": "00000002-1111-4111-8111-000000000002",
+      "type": "manga",
+      "attributes": {
+        "title": {
+          "ja-ro": "Test Atlas",
+          "en": "Another Test"
+        },
+        "altTitles": [],
+        "description": {
+          "en": "Synthetic API fixture for Midoku."
+        },
+        "originalLanguage": "ja"
+      },
+      "relationships": []
+    }
+  ],
+  "limit": 20,
+  "offset": 0,
+  "total": 21
+}

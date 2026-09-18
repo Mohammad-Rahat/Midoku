@@ -8,7 +8,14 @@ nonisolated struct BundledSourceExtension: Sendable {
 }
 
 nonisolated enum AppExtensionCatalogue {
-    static let bundled: [BundledSourceExtension] = []
+    static func load() throws -> [BundledSourceExtension] {
+        try BundledExtensionResources.entries.map { resource in
+            BundledSourceExtension(
+                manifest: try JSONDecoder().decode(ExtensionManifest.self, from: Data(resource.manifestJSON.utf8)),
+                javaScript: resource.javaScript
+            )
+        }
+    }
 }
 
 @MainActor
@@ -43,7 +50,7 @@ final class ExtensionEnvironment {
             // Load first: an invalid persisted store must not be overwritten with empty data.
             connections = try await connectionStore.load()
             let existing = Set(await registry.manifests().map(\.id))
-            for source in AppExtensionCatalogue.bundled where !existing.contains(source.manifest.id) {
+            for source in try AppExtensionCatalogue.load() where !existing.contains(source.manifest.id) {
                 try await registry.registerBundled(manifest: source.manifest, javaScript: source.javaScript)
             }
             available = await registry.manifests()

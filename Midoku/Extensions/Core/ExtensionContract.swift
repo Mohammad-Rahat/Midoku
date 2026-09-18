@@ -67,8 +67,8 @@ nonisolated struct ExtensionManifest: Codable, Equatable, Sendable, Identifiable
               !capabilities.isEmpty, domains.count <= 32 else {
             throw ExtensionFailure.invalidManifest("Check identity, name, release version, and capabilities.")
         }
-        guard Set(domains).count == domains.count, domains.allSatisfy(SourceRequestPolicy.isPublicHostName) else {
-            throw ExtensionFailure.invalidManifest("Use distinct, lowercase, exact public host names.")
+        guard Set(domains).count == domains.count, domains.allSatisfy(SourceRequestPolicy.isDomainPermission) else {
+            throw ExtensionFailure.invalidManifest("Use distinct lowercase hosts or reviewed *.domain permissions.")
         }
     }
 }

@@ -14,12 +14,29 @@ nonisolated struct SourceRequestPolicy: Sendable {
         return true
     }
 
+    /// A leading "*." grants only descendants of a reviewed domain, never the domain itself.
+    static func isDomainPermission(_ value: String) -> Bool {
+        let root = value.hasPrefix("*.") ? String(value.dropFirst(2)) : value
+        return isPublicHostName(root)
+    }
+
+    private func allows(_ host: String) -> Bool {
+        domains.contains { permission in
+            guard Self.isDomainPermission(permission) else { return false }
+            if permission.hasPrefix("*.") {
+                let suffix = String(permission.dropFirst(1))
+                return host.hasSuffix(suffix)
+            }
+            return host == permission
+        }
+    }
+
     func validate(_ url: URL) throws {
         guard url.scheme?.lowercased() == "https",
               url.user == nil, url.password == nil,
               url.port == nil || url.port == 443,
               let host = url.host?.lowercased(),
-              Self.isPublicHostName(host), domains.contains(host) else {
+              Self.isPublicHostName(host), allows(host) else {
             throw ExtensionFailure.requestNotAllowed
         }
     }
