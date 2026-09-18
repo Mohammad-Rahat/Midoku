@@ -4,7 +4,7 @@ protocol SourceHTTPTransport: Sendable {
     func send(_ request: URLRequest, maximumBytes: Int) async throws -> SourceHTTPResponse
 }
 
-nonisolated enum SourceRequestKind: Sendable { case metadata, image }
+nonisolated enum SourceRequestKind: Sendable { case metadata, image, download }
 
 actor SourceRequestCoordinator {
     private let transport: any SourceHTTPTransport
@@ -12,6 +12,7 @@ actor SourceRequestCoordinator {
     private let verification: any ChallengeResolving
     private let minimumSpacing: Duration
     private var waitingMetadata: [UUID: Int] = [:]
+    private var waitingImages: [UUID: Int] = [:]
     private var activeConnections = Set<UUID>()
     private var nextRequest: [UUID: ContinuousClock.Instant] = [:]
 
@@ -44,17 +45,21 @@ actor SourceRequestCoordinator {
 
         // One request/verification flow per connection. Other sources remain independent.
         if kind == .metadata { waitingMetadata[connection.id, default: 0] += 1 }
+        if kind == .image { waitingImages[connection.id, default: 0] += 1 }
         do {
             while activeConnections.contains(connection.id) ||
-                (kind == .image && waitingMetadata[connection.id, default: 0] > 0) {
+                (kind != .metadata && waitingMetadata[connection.id, default: 0] > 0) ||
+                (kind == .download && waitingImages[connection.id, default: 0] > 0) {
                 try await Task.sleep(for: .milliseconds(20))
             }
             try Task.checkCancellation()
         } catch {
             if kind == .metadata { waitingMetadata[connection.id, default: 0] -= 1 }
+            if kind == .image { waitingImages[connection.id, default: 0] -= 1 }
             throw error
         }
         if kind == .metadata { waitingMetadata[connection.id, default: 0] -= 1 }
+        if kind == .image { waitingImages[connection.id, default: 0] -= 1 }
         activeConnections.insert(connection.id)
         defer { activeConnections.remove(connection.id) }
 
@@ -79,7 +84,7 @@ actor SourceRequestCoordinator {
             for (key, value) in try await sessions.headers(for: currentURL, connectionID: connection.id) {
                 request.setValue(value, forHTTPHeaderField: key)
             }
-            let response = try await transport.send(request, maximumBytes: (kind == .image ? 32 : 8) * 1024 * 1024)
+            let response = try await transport.send(request, maximumBytes: (kind == .metadata ? 8 : 32) * 1024 * 1024)
             try Task.checkCancellation()
             try policy.validate(response.url)
             guard response.url == currentURL else {
@@ -131,3 +136,4 @@ nonisolated struct NetworkExtensionHost: ExtensionHost {
         try await coordinator.request(input, connection: connection, manifest: manifest, interaction: interaction)
     }
 }
+

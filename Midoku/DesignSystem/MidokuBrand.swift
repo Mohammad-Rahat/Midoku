@@ -60,6 +60,7 @@ struct MidokuSplashView: View {
 }
 
 struct MidokuPrimaryButtonStyle: ButtonStyle {
+    @Environment(\.midokuAccentFill) private var accentFill
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {
@@ -69,7 +70,7 @@ struct MidokuPrimaryButtonStyle: ButtonStyle {
             .padding(.horizontal, 24)
             .padding(.vertical, 14)
             .frame(minHeight: 48)
-            .background(MidokuTheme.accentFill,
+            .background(accentFill,
                         in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .opacity(configuration.isPressed ? 0.85 : 1)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: configuration.isPressed)
@@ -83,3 +84,4 @@ struct MidokuPrimaryButtonStyle: ButtonStyle {
 #Preview("Splash — Dark") {
     MidokuSplashView().preferredColorScheme(.dark)
 }
+

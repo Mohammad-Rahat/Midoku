@@ -5,6 +5,7 @@ import UIKit
 /// Connection-scoped, bounded memory cache. All bytes still pass through the source coordinator.
 actor SourceImageStore {
     private let requests: SourceRequestCoordinator
+    private var generation = UUID()
     private let cache = NSCache<NSString, UIImage>()
 
     init(requests: SourceRequestCoordinator) {
@@ -13,11 +14,14 @@ actor SourceImageStore {
         cache.countLimit = 150
     }
 
+    func clear() { generation = UUID(); cache.removeAllObjects() }
+
     func image(url: URL, headers: [String: String], connection: SourceConnection,
                manifest: ExtensionManifest, maximumDimension: Int) async throws -> UIImage {
         let key = ([connection.id.uuidString, url.absoluteString, String(maximumDimension)] +
             headers.keys.sorted().map { "\($0)=\(headers[$0] ?? "")" }).joined(separator: "\n") as NSString
         if let image = cache.object(forKey: key) { return image }
+        let token = generation
         let response = try await requests.request(
             SourceHTTPRequest(url: url, headers: headers), connection: connection,
             manifest: manifest, interaction: .foreground, kind: .image
@@ -33,7 +37,8 @@ actor SourceImageStore {
             throw ExtensionFailure.invalidResponse("This page is not a supported image.")
         }
         let image = UIImage(cgImage: cgImage)
-        cache.setObject(image, forKey: key, cost: cgImage.bytesPerRow * cgImage.height)
+        if generation == token { cache.setObject(image, forKey: key, cost: cgImage.bytesPerRow * cgImage.height) }
         return image
     }
 }
+

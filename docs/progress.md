@@ -1,5 +1,37 @@
 # Development progress
 
+## 2026-09-18 (UTC) — Settings and connected management features
+
+Implemented all nine Settings routes with native grouped styling, adaptive accents,
+Dynamic Type, and persistent typed preferences. Appearance/launch tab/grid density,
+reader controls, Home section management, categories, app lock/History controls,
+bundled extension management, storage/foreground downloads, backup/recovery, and
+About/diagnostic export are connected to local services. See [settings.md](settings.md)
+for behavior, migration, backup format, and limits.
+
+Source UUIDs migrate from the existing connection inventory into one atomic settings
+snapshot. Backups validate before mutation, preserve device-lock enrollment, reject
+identity collisions, create recovery copies, and retain independent offline files.
+History clearing does not clear progress. Cache clearing only removes disposable
+cache, not downloads, sessions, recovery files, or user data. Source removal retains
+archived identities and references. Queued image downloads use the existing request
+coordinator with lower priority than reader images and metadata.
+
+Verification: extension typechecking/bundling and 16 Node tests pass; all Swift files
+pass syntax parsing. All 10 portable Swift state tests pass, covering round-trip/tamper rejection,
+local-wins merge, reference/duplicate validation, UUID migration, stale writes,
+History retention, lock state transitions, download validation/promotion recovery,
+and recovery-before-replace. Native app builds, the full JavaScriptCore Swift suite,
+simulator visuals, LocalAuthentication, privacy snapshots, and real-device downloads
+have not been verified here. No signing or deployment settings were changed.
+
+This is not completion of the product plan's Phase 8 acceptance criterion. The
+personal-library database/composition, category assignment, library refresh,
+per-entry reader overrides, custom assets/full-library archives, and signed remote
+extension updates still depend on their earlier planned features. The settings UI
+states these limits instead of presenting unsupported actions as working features.
+
+
 ## 2026-09-19 — Source browsing, filters, entries, and direct reading
 
 ### Implemented
@@ -274,3 +306,4 @@ contract. esbuild still performs the TypeScript compilation and bundling.
 - Store only the connection inventory in atomic JSON now; retain its UUIDs when
   moving that inventory into the planned library database.
 - Root and Xcode-visible plan copies record the new source/extension decisions.
+

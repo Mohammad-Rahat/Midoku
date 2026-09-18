@@ -83,12 +83,24 @@ nonisolated struct SourceConnection: Codable, Equatable, Identifiable, Sendable 
     let extensionID: String
     var name: String
     var isEnabled: Bool
+    var isArchived: Bool
 
-    init(id: UUID = UUID(), extensionID: String, name: String, isEnabled: Bool = true) {
+    init(id: UUID = UUID(), extensionID: String, name: String, isEnabled: Bool = true, isArchived: Bool = false) {
         self.id = id
         self.extensionID = extensionID
         self.name = name
         self.isEnabled = isEnabled
+        self.isArchived = isArchived
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, extensionID, name, isEnabled, isArchived }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(UUID.self, forKey: .id)
+        extensionID = try values.decode(String.self, forKey: .extensionID)
+        name = try values.decode(String.self, forKey: .name)
+        isEnabled = try values.decode(Bool.self, forKey: .isEnabled)
+        isArchived = try values.decodeIfPresent(Bool.self, forKey: .isArchived) ?? false
     }
 }
 
@@ -196,3 +208,4 @@ extension SourceAdapter {
 
     func searchFilters() async throws -> [SourceSearchFilter] { [] }
 }
+

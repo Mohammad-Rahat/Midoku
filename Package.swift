@@ -7,7 +7,12 @@ let package = Package(
     platforms: [.macOS(.v14), .iOS(.v17)],
     products: [.library(name: "MidokuExtensions", targets: ["MidokuExtensions"])],
     targets: [
-        .target(name: "MidokuExtensions", path: "Midoku/Extensions/Core"),
+        .target(
+            name: "MidokuExtensions", path: "Midoku",
+            exclude: ["ContentView.swift", "MidokuApp.swift", "Info.plist", "plan.md", "Assets.xcassets",
+                      "Resources", "DesignSystem", "Development", "Extensions/Apple", "Settings/Apple"],
+            sources: ["Extensions/Core", "Settings/Core"]
+        ),
         .testTarget(
             name: "MidokuExtensionsTests",
             dependencies: ["MidokuExtensions"],
@@ -16,3 +21,4 @@ let package = Package(
         )
     ]
 )
+

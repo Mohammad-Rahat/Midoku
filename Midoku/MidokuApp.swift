@@ -9,9 +9,11 @@ import SwiftUI
 
 @main
 struct MidokuApp: App {
+    @UIApplicationDelegateAdaptor(MidokuAppDelegate.self) private var appDelegate
     var body: some Scene {
         WindowGroup {
             ContentView()
         }
     }
 }
+

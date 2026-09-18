@@ -4,6 +4,8 @@ struct SourceEntryView: View {
     let summary: MangaSummary
     let adapter: any SourceAdapter
     let extensions: ExtensionEnvironment
+    @Environment(DownloadManager.self) private var downloads
+    @Environment(AppSettingsStore.self) private var settings
     @State private var details: MangaDetails?
     @State private var detailError: String?
     @State private var detailRetry = 0
@@ -22,6 +24,17 @@ struct SourceEntryView: View {
     private var chapterQuery: ChapterQuery? {
         guard details != nil, adapter.manifest.capabilities.contains(.chapters) else { return nil }
         return ChapterQuery(language: chapterLanguage, revision: chapterRetry)
+    }
+
+    private func chapterIdentity(_ chapter: ChapterRecord) -> SourceChapterIdentity {
+        SourceChapterIdentity(listing: SourceListingIdentity(connectionID: adapter.connection.id, externalID: summary.id), externalID: chapter.id)
+    }
+    private func downloadStatus(_ chapter: ChapterRecord) -> DownloadStatus? {
+        downloads.items.first { $0.record.id == chapterIdentity(chapter) && $0.status != .cancelled }?.status
+    }
+    private func download(_ chapter: ChapterRecord) {
+        Task { await downloads.enqueue(ReadingRecord(identity: chapterIdentity(chapter), mangaTitle: details?.title ?? summary.title,
+            sourceName: adapter.connection.name, chapter: chapter, openedAt: Date())) }
     }
 
     var body: some View {
@@ -80,13 +93,37 @@ struct SourceEntryView: View {
                             .font(.footnote).foregroundStyle(MidokuTheme.secondaryText)
                     } else {
                         ForEach(chapters.items) { chapter in
-                            NavigationLink {
-                                SourceChapterReader(mangaID: summary.id, mangaTitle: details?.title ?? summary.title,
-                                                    chapter: chapter, adapter: adapter, extensions: extensions)
-                            } label: {
-                                SourceChapterRow(chapter: chapter)
+                            HStack(spacing: 8) {
+                                NavigationLink {
+                                    ChapterReaderDestination(mangaID: summary.id, mangaTitle: details?.title ?? summary.title,
+                                        chapter: chapter, adapter: adapter, extensions: extensions)
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        if settings.snapshot.preferences.chapterThumbnails {
+                                            SourceCoverView(url: details?.coverURL ?? summary.coverURL, adapter: adapter, extensions: extensions)
+                                                .frame(width: 48, height: 64).clipShape(RoundedRectangle(cornerRadius: 6))
+                                                .accessibilityHidden(true)
+                                        }
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            SourceChapterRow(chapter: chapter)
+                                            if let status = downloadStatus(chapter) {
+                                                Label(status.title, systemImage: status == .completed ? "checkmark.circle" : "arrow.down.circle")
+                                                    .font(.caption).foregroundStyle(MidokuTheme.secondaryText)
+                                            }
+                                        }
+                                    }
+                                }.disabled(!adapter.manifest.capabilities.contains(.pages))
+                                Menu {
+                                    Button("Download chapter", systemImage: "arrow.down.circle") { download(chapter) }
+                                        .disabled(!adapter.manifest.capabilities.contains(.pages) || !downloads.isReady || downloadStatus(chapter) != nil)
+                                    NavigationLink("Manage downloads") { DownloadsListView() }
+                                } label: { Image(systemName: "ellipsis").frame(minWidth: 44, minHeight: 44) }
+                                    .accessibilityLabel("Chapter actions")
                             }
-                            .disabled(!adapter.manifest.capabilities.contains(.pages))
+                            .contextMenu {
+                                Button("Download chapter", systemImage: "arrow.down.circle") { download(chapter) }
+                                    .disabled(!adapter.manifest.capabilities.contains(.pages) || !downloads.isReady || downloadStatus(chapter) != nil)
+                            }
                         }
                     }
                     if chapters.nextCursor != nil {
@@ -107,6 +144,7 @@ struct SourceEntryView: View {
             }
         }
         .scrollContentBackground(.hidden).background(MidokuTheme.background)
+        .toolbar { NavigationLink { DownloadsListView() } label: { Label("Downloads", systemImage: "arrow.down.circle") } }
         .navigationTitle("Entry")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: detailRetry) {
@@ -207,3 +245,4 @@ private struct SourceChapterRow: View {
         .padding(.vertical, 4)
     }
 }
+

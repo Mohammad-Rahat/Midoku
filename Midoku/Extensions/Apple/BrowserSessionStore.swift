@@ -24,6 +24,12 @@ final class BrowserSessionStore: SourceSessionProviding {
         return view
     }
 
+    func clearSession(for connectionID: UUID) async {
+        let store = dataStore(for: connectionID)
+        await store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast)
+        userAgents.removeValue(forKey: connectionID)
+    }
+
     @MainActor
     func headers(for url: URL, connectionID: UUID) async throws -> [String: String] {
         if userAgents[connectionID] == nil {
@@ -55,3 +61,4 @@ final class BrowserSessionStore: SourceSessionProviding {
     }
 
 }
+

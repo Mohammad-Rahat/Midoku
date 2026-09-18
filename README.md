@@ -9,11 +9,14 @@ Open `Midoku.xcodeproj` in Xcode. The current project uses Xcode 27's JSON-style
 `project.xcproj` format. The existing app target, signing configuration, bundle ID,
 and configured deployment setting are preserved.
 
-The app currently has the five-tab navigation shell and a source-independent extension
-foundation. Settings → Extensions manages registered bundled sources. In Debug builds,
+The app has five-tab navigation, persistent Settings, managed Home pins, reading
+History/positions, foreground downloads/offline access, and a source-independent
+extension foundation. See [settings behavior, storage, and verification](docs/settings.md)
+for implemented scope and the remaining personal-library dependencies. Settings → Extensions manages registered bundled sources. In Debug builds,
 Settings → Extension Lab runs the two offline TypeScript fixtures through JavaScriptCore.
 MangaDex is bundled for testing: add it in Settings → Extensions, then open
-Browse → MangaDex for feeds, search, filters, entry details, chapters, and direct reading. There is no remote extension installer yet.
+Browse → MangaDex for feeds, search, filters, entry details, chapters, and direct reading. The chapter action menu downloads individual chapters; Settings manages the queue.
+There is no remote extension installer yet.
 
 The supplied [UI design kit and Midoku brand assets](docs/design/README.md) are
 stored in the repository. The app uses their icon, adaptive palette, and empty-state
@@ -48,3 +51,4 @@ default compiler caches, see the commands recorded in [progress](docs/progress.m
 Cloudflare support uses a visible WebKit verification session and a bounded request
 retry. Actual acceptance by protected sources requires source-specific physical-device
 testing; passing fixture checks does not establish live Cloudflare compatibility.
+

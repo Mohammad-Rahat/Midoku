@@ -3,6 +3,7 @@ import SwiftUI
 struct SourceBrowserView: View {
     let connection: SourceConnection
     let extensions: ExtensionEnvironment
+    var initialSection: HomeSection? = nil
     @State private var adapter: (any SourceAdapter)?
     @State private var errorMessage: String?
     @State private var retry = 0
@@ -10,7 +11,7 @@ struct SourceBrowserView: View {
     var body: some View {
         Group {
             if let adapter {
-                SourceBrowserContent(adapter: adapter, extensions: extensions)
+                SourceBrowserContent(adapter: adapter, extensions: extensions, initialSection: initialSection)
             } else if let errorMessage {
                 SourceErrorView(message: errorMessage) { retry += 1 }
             } else {
@@ -55,6 +56,11 @@ nonisolated private struct BrowseRequest: Equatable, Sendable {
 private struct SourceBrowserContent: View {
     let adapter: any SourceAdapter
     let extensions: ExtensionEnvironment
+    var initialSection: HomeSection? = nil
+    @Environment(AppSettingsStore.self) private var settings
+    @Environment(\.midokuAccentFill) private var accentFill
+    @State private var pinMessage: String?
+    @State private var showHomeSections = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var results = SourcePageStore<MangaSummary>()
     @State private var feeds: [FeedDescriptor] = []
@@ -125,7 +131,7 @@ private struct SourceBrowserContent: View {
                                                description: Text("Try another title or change your filters."))
                     }
                     MangaResultsGrid(items: results.items, adapter: adapter, extensions: extensions,
-                                     minimumWidth: dynamicTypeSize.isAccessibilitySize ? 180 : 110)
+                                     minimumWidth: dynamicTypeSize.isAccessibilitySize ? 200 : settings.snapshot.preferences.coverDensity.minimumWidth)
                     if results.nextCursor != nil {
                         Button {
                             pageRequest += 1
@@ -159,7 +165,18 @@ private struct SourceBrowserContent: View {
             submittedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
             searchFocused = false
         }
+        .alert("Home section", isPresented: Binding(get: { pinMessage != nil }, set: { if !$0 { pinMessage = nil } })) {
+            Button("Manage sections") { showHomeSections = true }
+            Button("Done", role: .cancel) { }
+        } message: { Text(pinMessage ?? "") }
+        .sheet(isPresented: $showHomeSections) {
+            NavigationStack { HomeSectionsSettingsView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { showHomeSections = false } } } }
+        }
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { if let selectedTab { pin(selectedTab) } } label: { Label("Pin to Home", systemImage: "pin") }
+                    .disabled(selectedTab == nil)
+            }
             if adapter.manifest.capabilities.contains(.filters) {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -184,7 +201,18 @@ private struct SourceBrowserContent: View {
                 if adapter.manifest.capabilities.contains(.feeds) {
                     feeds = try await adapter.feeds()
                 }
-                if selectedTab == nil {
+                if selectedTab == nil, let initialSection {
+                    query = initialSection.query
+                    submittedQuery = initialSection.query
+                    filters = initialSection.filters
+                    if let feedID = initialSection.feedID {
+                        guard feeds.contains(where: { $0.id == feedID }) else {
+                            feedError = "This saved feed is no longer available. Choose another feed."
+                            return
+                        }
+                        selectedTab = .feed(feedID)
+                    } else if adapter.manifest.capabilities.contains(.search) { selectedTab = .search }
+                } else if selectedTab == nil {
                     selectedTab = feeds.first.map { .feed($0.id) } ??
                         (adapter.manifest.capabilities.contains(.search) ? .search : nil)
                 }
@@ -267,12 +295,31 @@ private struct SourceBrowserContent: View {
         } label: {
             Text(title).font(.subheadline.weight(.semibold))
                 .padding(.horizontal, 14).frame(minHeight: 44)
-                .background(selectedTab == selection ? MidokuTheme.accentFill : MidokuTheme.surface, in: Capsule())
+                .background(selectedTab == selection ? accentFill : MidokuTheme.surface, in: Capsule())
                 .foregroundStyle(selectedTab == selection ? MidokuTheme.onAccent : MidokuTheme.primaryText)
         }
         .buttonStyle(.plain)
+        .contextMenu { Button("Pin to Home", systemImage: "pin") { pin(selection) } }
         .id(selection)
         .accessibilityAddTraits(selectedTab == selection ? .isSelected : [])
+    }
+
+    private func pin(_ selection: SourceBrowseTab) {
+        let feedID: String?
+        let title: String
+        switch selection {
+        case .feed(let id): feedID = id; title = feeds.first { $0.id == id }?.title ?? "Saved feed"
+        case .search: feedID = nil; title = query.isEmpty ? "Search" : query
+        }
+        let scope: SourceSearchFilter.Scope = feedID == nil ? .search : .feed
+        let scoped = filterDefinitions.map { definitions in
+            let ids = Set(definitions.filter { $0.scopes.contains(scope) }.map(\.id))
+            return filters.filter { ids.contains($0.key) }
+        } ?? filters
+        let section = HomeSection(connectionID: adapter.connection.id, feedID: feedID,
+            query: feedID == nil ? query.trimmingCharacters(in: .whitespacesAndNewlines) : "",
+            filters: scoped, sourceTitle: adapter.connection.name, title: String(title.prefix(100)))
+        pinMessage = settings.pin(section) ? "Pinned to Home with your current filters." : "This feed and these filters are already pinned. Open Manage sections to show, rename, or move the existing section."
     }
 
     private func load(_ request: BrowseRequest) async {
@@ -330,3 +377,4 @@ struct SourceErrorView: View {
         .frame(maxWidth: .infinity).padding()
     }
 }
+
