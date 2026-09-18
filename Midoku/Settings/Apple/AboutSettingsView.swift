@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct AboutSettingsView: View {
     let extensions: ExtensionEnvironment

@@ -4,7 +4,7 @@ nonisolated protocol SettingChoice: RawRepresentable, CaseIterable, Identifiable
     var title: String { get }
 }
 extension SettingChoice {
-    var id: String { rawValue }
+    nonisolated var id: String { rawValue }
 }
 
 nonisolated enum AppAppearance: String, SettingChoice {
