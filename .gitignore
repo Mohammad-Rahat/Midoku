@@ -1,1 +1,10 @@
-# All project files are tracked in this private repository at the owner's request.
+.DS_Store
+.build/
+.swiftpm/
+DerivedData/
+**/xcuserdata/
+**/node_modules/
+Extensions/dist/
+*.xcresult
+__pycache__/
+*.pyc
