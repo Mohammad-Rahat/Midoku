@@ -1,5 +1,22 @@
 # Development progress
 
+## 2026-09-18 (UTC) — Direct main delivery and IPA build
+
+At the user's request, the settings implementation was fast-forwarded directly
+onto `main`; GitHub closed the draft pull request automatically. Added an Xcode 27
+Actions workflow that runs the complete Swift suite, archives a Release device
+build, and uploads an unsigned IPA with its source commit and SHA-256 checksum.
+The workflow preserves signing/deployment settings and needs no signing secrets.
+
+The first native archive found a missing UniformTypeIdentifiers import in the
+diagnostics exporter. Fixed it and made the settings identifier witness explicitly
+nonisolated. [The next run](https://github.com/Mohammad-Rahat/Midoku/actions/runs/35388694209)
+passed all 34 Swift tests in nine suites and archived/package-validated successfully.
+The archive also exposed an existing launch configuration warning: Info.plist now
+references the bundled `LaunchScreen` storyboard. Physical-device behavior and
+visual acceptance remain unverified; this IPA requires signing before installation.
+See [IPA builds](ipa-build.md) and [settings verification](settings.md).
+
 ## 2026-09-18 (UTC) — Settings and connected management features
 
 Implemented all nine Settings routes with native grouped styling, adaptive accents,
@@ -306,4 +323,3 @@ contract. esbuild still performs the TypeScript compilation and bundling.
 - Store only the connection inventory in atomic JSON now; retain its UUIDs when
   moving that inventory into the planned library database.
 - Root and Xcode-visible plan copies record the new source/extension decisions.
-

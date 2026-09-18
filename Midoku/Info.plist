@@ -4,8 +4,8 @@
 <dict>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Use Face ID to unlock Midoku and protect your reading activity.</string>
-	<key>UILaunchScreen</key>
-	<false/>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>
