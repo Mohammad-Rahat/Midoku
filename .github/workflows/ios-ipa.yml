@@ -1,0 +1,97 @@
+name: iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'Midoku/**'
+      - 'Midoku.xcodeproj/**'
+      - 'Tests/**'
+      - 'Package.swift'
+      - '.github/workflows/ios-ipa.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Test and package unsigned IPA
+    runs-on: xcode-27
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Check Xcode and SDK
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          xcodebuild -list -project Midoku.xcodeproj
+
+      - name: Run Swift tests
+        run: swift test
+
+      - name: Archive for iOS
+        run: |
+          mkdir -p build
+          set -o pipefail
+          xcodebuild archive \
+            -project Midoku.xcodeproj \
+            -scheme Midoku \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$PWD/build/Midoku.xcarchive" \
+            -resultBundlePath "$PWD/build/Archive.xcresult" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            | tee build/archive.log
+
+      - name: Package unsigned IPA
+        run: |
+          app="$PWD/build/Midoku.xcarchive/Products/Applications/Midoku.app"
+          test -d "$app"
+          test -s "$app/Midoku"
+          file "$app/Midoku"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$app/Info.plist"
+          mkdir -p build/package/Payload build/artifacts
+          ditto "$app" build/package/Payload/Midoku.app
+          (cd build/package && /usr/bin/zip -qry ../artifacts/Midoku-unsigned.ipa Payload)
+          unzip -t build/artifacts/Midoku-unsigned.ipa
+          (cd build/artifacts && shasum -a 256 Midoku-unsigned.ipa > SHA256SUMS.txt)
+          {
+            printf 'Source commit: %s\n' "$GITHUB_SHA"
+            xcodebuild -version
+            printf '\nUnsigned iOS device build. Sign with a valid Apple identity and provisioning profile before installation.\n'
+          } > build/artifacts/BUILD.txt
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Midoku-unsigned-${{ github.sha }}
+          path: build/artifacts/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload archive diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Midoku-build-diagnostics-${{ github.sha }}
+          path: |
+            build/archive.log
+            build/Archive.xcresult
+          if-no-files-found: ignore
+          retention-days: 7

@@ -33,6 +33,9 @@ for defaults, live checks, and current UI limits. Comix remains unimplemented.
 
 ## Checks
 
+For an unsigned iOS device IPA, use the **iOS IPA** Actions workflow. See
+[IPA builds](docs/ipa-build.md) for artifacts and signing requirements.
+
 ```sh
 cd Extensions
 npm ci
@@ -51,4 +54,3 @@ default compiler caches, see the commands recorded in [progress](docs/progress.m
 Cloudflare support uses a visible WebKit verification session and a bounded request
 retry. Actual acceptance by protected sources requires source-specific physical-device
 testing; passing fixture checks does not establish live Cloudflare compatibility.
-
