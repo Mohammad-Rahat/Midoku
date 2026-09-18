@@ -160,7 +160,7 @@ function chapter(value: unknown, mangaID: string, ordinal: number, requestedLang
     const title = optionalText(attributes.title) ?? fallback;
     return {
         id: uuid(entry.id), title: volume === null ? title : `Vol. ${volume} · ${title}`,
-        number, ordinal, language: translatedLanguage,
+        number, ordinal, language: translatedLanguage, volume,
         groups: relationships(entry).filter(item => item.type === "scanlation_group" && item.attributes != null)
             .map(item => text(object(item.attributes).name))
     };
@@ -271,3 +271,4 @@ export default defineExtension({
         }));
     }
 });
+

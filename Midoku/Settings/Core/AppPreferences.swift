@@ -136,6 +136,8 @@ nonisolated struct ReadingRecord: Codable, Identifiable, Sendable {
     var sourceName: String
     var chapter: ChapterRecord
     var openedAt: Date
+    var entryID: UUID? = nil
+    var slotID: UUID? = nil
 }
 nonisolated struct ReadingPosition: Codable, Identifiable, Sendable {
     var id: SourceChapterIdentity { identity }
@@ -148,16 +150,33 @@ nonisolated struct ReadingPosition: Codable, Identifiable, Sendable {
 }
 
 nonisolated struct AppSnapshot: Codable, Sendable {
-    var version = 1
+    var version = 2
     var preferences = AppPreferences()
     var connections: [SourceConnection] = []
     var categories: [LibraryCategory] = []
     var homeSections: [HomeSection] = []
     var history: [ReadingRecord] = []
     var progress: [ReadingPosition] = []
+    var library = LibraryState()
+
+    init() {}
+    private enum CodingKeys: String, CodingKey { case version, preferences, connections, categories, homeSections, history, progress, library }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        let storedVersion = try values.decode(Int.self, forKey: .version)
+        guard (1...2).contains(storedVersion) else { throw SettingsFailure.futureVersion }
+        version = 2
+        preferences = try values.decode(AppPreferences.self, forKey: .preferences)
+        connections = try values.decode([SourceConnection].self, forKey: .connections)
+        categories = try values.decode([LibraryCategory].self, forKey: .categories)
+        homeSections = try values.decode([HomeSection].self, forKey: .homeSections)
+        history = try values.decode([ReadingRecord].self, forKey: .history)
+        progress = try values.decode([ReadingPosition].self, forKey: .progress)
+        library = try values.decodeIfPresent(LibraryState.self, forKey: .library) ?? LibraryState()
+    }
 
     func validate() throws {
-        guard version == 1 else { throw SettingsFailure.futureVersion }
+        guard (1...2).contains(version) else { throw SettingsFailure.futureVersion }
         guard connections.count <= 1000, categories.count <= 1000, homeSections.count <= 500,
               history.count <= 100, progress.count <= 50_000 else { throw SettingsFailure.invalidBackup }
         guard Set(connections.map(\.id)).count == connections.count,
@@ -172,6 +191,7 @@ nonisolated struct AppSnapshot: Codable, Sendable {
             throw SettingsFailure.invalidBackup
         }
         let sourceIDs = Set(connections.map(\.id))
+        try library.validate(connections: sourceIDs, categories: Set(categories.map(\.id)))
         for pin in homeSections {
             guard sourceIDs.contains(pin.connectionID), !pin.title.isEmpty, pin.title.count <= 100,
                   pin.sourceTitle.count <= 100, pin.query.count <= 1000, pin.filters.count <= 100,
@@ -199,6 +219,10 @@ nonisolated struct AppSnapshot: Codable, Sendable {
     }
 
     mutating func opened(_ record: ReadingRecord) {
+        if let entryID = record.entryID, let index = library.entries.firstIndex(where: { $0.id == entryID }) {
+            library.entries[index].lastReadAt = record.openedAt
+            if library.entries[index].status == .planned { library.entries[index].status = .reading }
+        }
         guard preferences.recordHistory else { return }
         history.removeAll { $0.id == record.id }
         history.insert(record, at: 0)
@@ -231,6 +255,11 @@ nonisolated struct AppSnapshot: Codable, Sendable {
         var records = Dictionary(uniqueKeysWithValues: history.map { ($0.id, $0) })
         for record in imported.history where record.openedAt > (records[record.id]?.openedAt ?? .distantPast) { records[record.id] = record }
         result.history = Array(records.values.sorted(by: Self.historyOrder).prefix(100))
+        var categoryMap: [UUID: UUID] = [:]
+        for category in imported.categories {
+            categoryMap[category.id] = result.categories.first { $0.id == category.id || LibraryCategory.normalized($0.name) == LibraryCategory.normalized(category.name) }?.id
+        }
+        result.library = try library.merging(imported.library, categoryMap: categoryMap)
         try result.validate()
         return result
     }
@@ -241,7 +270,7 @@ nonisolated enum SettingsFailure: Error, LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .futureVersion: "This file uses a newer format. Update Midoku before opening it."
-        case .invalidBackup: "This is not a complete, valid Midoku settings backup. Your current data has not changed."
+        case .invalidBackup: "This is not a complete, valid Midoku backup. Your current data has not changed."
         case .duplicateIdentity: "The file contains duplicate records. Your current data has not changed."
         case .identityConflict: "A source identifier belongs to a different extension on this device. These records cannot be safely combined."
         case .tooLarge: "This file is larger than the supported 32 MB backup limit."

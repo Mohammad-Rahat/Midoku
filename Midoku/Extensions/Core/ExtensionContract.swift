@@ -149,6 +149,8 @@ nonisolated struct ChapterRecord: Codable, Sendable, Identifiable {
     let ordinal: Int
     let language: String?
     var groups: [String]? = nil
+    var volume: String? = nil
+    var uploadedAt: String? = nil
 }
 
 nonisolated struct PageResource: Codable, Sendable, Identifiable {

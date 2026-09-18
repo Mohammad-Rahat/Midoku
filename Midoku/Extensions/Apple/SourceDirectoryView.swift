@@ -45,6 +45,7 @@ struct SourceDirectoryView: View {
         }
         .scrollContentBackground(.hidden)
         .background(MidokuTheme.background)
-        .navigationTitle("Browse")
+        .navigationTitle("Browse").navigationBarTitleDisplayMode(.inline)
     }
 }
+

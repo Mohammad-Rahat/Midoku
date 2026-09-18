@@ -85,12 +85,6 @@ struct SettingsView: View {
     @Environment(AppSettingsStore.self) private var settings
     var body: some View {
         List {
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Make room for your way of reading.")
-                        .font(.subheadline).foregroundStyle(MidokuTheme.secondaryText)
-                }.listRowBackground(Color.clear).listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 4, trailing: 0))
-            }
             Section("Personalize") {
                 NavigationLink { AppearanceSettingsView() } label: {
                     SettingLabel(title: "Appearance", symbol: "circle.lefthalf.filled", detail: settings.snapshot.preferences.appearance.title)
@@ -130,7 +124,7 @@ struct SettingsView: View {
             }.listRowBackground(MidokuTheme.surface)
             #endif
         }
-        .settingsStyle().navigationTitle("Settings").navigationBarTitleDisplayMode(.large)
+        .settingsStyle().navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -194,7 +188,7 @@ struct LibrarySettingsView: View {
                 SettingPicker(title: "Default sort", selection: settings.binding(\.librarySort))
                 Toggle("Refresh when opening the app", isOn: settings.binding(\.refreshOnLaunch))
             } header: { Text("Library defaults") } footer: {
-                Text("Saved for your personal library. Library entries and their refresh service are not available in this build yet; these defaults will apply when they are added.")
+                Text("Sort your library and check followed sources when opening the app. Pull to refresh for an immediate check.")
             }.listRowBackground(MidokuTheme.surface)
             Section {
                 Toggle("Show chapter thumbnails", isOn: settings.binding(\.chapterThumbnails))
@@ -246,7 +240,7 @@ struct ReaderSettingsView: View {
                 Text("Your previous screen brightness is restored when you leave the reader or switch away from Midoku.")
             }.listRowBackground(MidokuTheme.surface)
             Section {
-                Text("These are your global defaults. Personal-entry overrides will be available with the personal library.")
+                Text("These are your global defaults. Use Edit details on an entry to set its own reader preferences.")
                     .font(.footnote).foregroundStyle(MidokuTheme.secondaryText)
             }.listRowBackground(Color.clear)
         }.settingsStyle().navigationTitle("Reader preferences")

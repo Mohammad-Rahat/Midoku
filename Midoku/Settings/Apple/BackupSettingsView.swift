@@ -34,7 +34,7 @@ struct BackupSettingsView: View {
             Section {
                 Label("Keep a copy of your reading setup", systemImage: "externaldrive.badge.checkmark")
                     .font(.headline).padding(.vertical, 8)
-                Text("Includes preferences, categories, Home sections, reading positions, History, and source connections. Your export contains private reading information and is not password protected.")
+                Text("Includes your library, chapter arrangements, local edits and covers, clipboard, preferences, categories, Home sections, reading positions, History, and source connections. Your export contains private reading information and is not password protected.")
                     .font(.callout).foregroundStyle(MidokuTheme.secondaryText)
             }.listRowBackground(MidokuTheme.surface)
             Section {
@@ -42,7 +42,7 @@ struct BackupSettingsView: View {
                 Button { importing = true } label: { Label("Import backup", systemImage: "square.and.arrow.down") }
                 if busy { ProgressView("Preparing backup") }
             } footer: {
-                Text("Offline pages, cache, sign-in sessions, device lock enrollment, and executable extensions are excluded. Personal-library entries and custom covers are not available in this build; this settings backup does not claim to back up a future library.")
+                Text("Offline pages, cache, sign-in sessions, device lock enrollment, and executable extensions are excluded.")
             }.listRowBackground(MidokuTheme.surface).disabled(busy || settings.isRestoring)
             Section {
                 NavigationLink { RecoveryBackupsView(extensions: extensions) } label: {
@@ -136,13 +136,14 @@ struct RestorePreviewView: View {
                     LabeledContent("Home sections", value: "\(preview.archive.counts.homeSections)")
                     LabeledContent("Reading positions", value: "\(preview.archive.counts.progress)")
                     LabeledContent("History records", value: "\(preview.archive.counts.history)")
-                    LabeledContent("Library entries / chapters", value: "0 / 0")
+                    LabeledContent("Library entries / chapters", value: "\(preview.archive.counts.libraryEntries ?? 0) / \(preview.archive.counts.chapters ?? 0)")
+                    LabeledContent("Custom covers", value: "\(preview.archive.counts.covers ?? 0)")
                 }.listRowBackground(MidokuTheme.surface)
                 Section {
                     Picker("Restore method", selection: $merge) { Text("Merge").tag(true); Text("Replace").tag(false) }
                         .pickerStyle(.segmented)
-                    Text(merge ? "Add missing records. Keep your current preferences, category names, Home order, and reading positions when records conflict. History keeps the newest visit to each chapter, up to 100."
-                         : "Replace preferences, categories, Home sections, History, reading positions, and source connections with this backup. Offline downloads, the source identities they require, and your current device lock are kept.")
+                    Text(merge ? "Add missing records. Keep your current entries, edits, preferences, category names, Home order, and reading positions when records conflict. History keeps the newest visit to each chapter, up to 100."
+                         : "Replace the library, chapter arrangements, covers, preferences, categories, Home sections, History, reading positions, and source connections with this backup. Offline downloads, the source identities they require, and your current device lock are kept.")
                         .font(.callout).foregroundStyle(MidokuTheme.secondaryText)
                 } header: { Text("Choose how to restore") } footer: {
                     Text("A local recovery copy is saved before any change. Sign-in sessions are never imported. Existing local source sessions stay on this device.")

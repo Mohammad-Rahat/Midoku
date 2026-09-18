@@ -7,6 +7,8 @@ struct SourceChapterReader: View {
     let chapter: ChapterRecord
     let adapter: any SourceAdapter
     let extensions: ExtensionEnvironment
+    var entryID: UUID? = nil
+    var slotID: UUID? = nil
     @Environment(AppSettingsStore.self) private var settings
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
@@ -23,7 +25,13 @@ struct SourceChapterReader: View {
     @State private var pendingResume: ReaderResumeTarget?
     @State private var scrollSave: Task<Void, Never>?
 
-    private var preferences: ReaderPreferences { settings.snapshot.preferences.reader }
+    @State private var loadedPages: Set<String> = []
+    @State private var endVisible = false
+    private var preferences: ReaderPreferences { entryID.flatMap { settings.snapshot.library.entry($0)?.readerOverride } ?? settings.snapshot.preferences.reader }
+    private var reachedEnd: Bool {
+        guard let last = pages.last, loadedPages.contains(last.id), scenePhase == .active else { return false }
+        return preferences.mode == .continuous ? endVisible : selectedPage == pages.count - 1
+    }
     private var identity: SourceChapterIdentity {
         SourceChapterIdentity(listing: SourceListingIdentity(connectionID: adapter.connection.id, externalID: mangaID), externalID: chapter.id)
     }
@@ -73,7 +81,7 @@ struct SourceChapterReader: View {
         }
         .sheet(isPresented: $showingPreferences) {
             NavigationStack {
-                ReaderSettingsView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingPreferences = false } } }
+                readerSettings.toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingPreferences = false } } }
             }
         }
         .onAppear { restoreGeneration = settings.restoreGeneration; device.begin(preferences) }
@@ -84,10 +92,16 @@ struct SourceChapterReader: View {
         }
         .onChange(of: selectedPage) { if preferences.mode != .continuous { positionFraction = 0; savePosition() } }
         .onDisappear { scrollSave?.cancel(); savePosition(); device.end() }
+        .task(id: reachedEnd) {
+            guard reachedEnd else { return }
+            do { try await Task.sleep(for: .seconds(1)); try Task.checkCancellation() } catch { return }
+            guard restoreGeneration == settings.restoreGeneration else { return }
+            settings.update { $0.finished(identity, entryID: entryID, slotID: slotID) }
+        }
         .task(id: retry) {
             if !opened {
                 settings.update { $0.opened(ReadingRecord(identity: identity, mangaTitle: mangaTitle,
-                    sourceName: adapter.connection.name, chapter: chapter, openedAt: Date())) }
+                    sourceName: adapter.connection.name, chapter: chapter, openedAt: Date(), entryID: entryID, slotID: slotID)) }
                 opened = true
             }
             errorMessage = nil
@@ -108,11 +122,17 @@ struct SourceChapterReader: View {
         }
     }
 
+    @ViewBuilder private var readerSettings: some View {
+        if let entryID, let entry = settings.snapshot.library.entry(entryID), entry.readerOverride != nil {
+            EntryReaderSettingsView(entryID: entryID)
+        } else { ReaderSettingsView() }
+    }
+
     private func pagedPages(viewport: CGSize) -> some View {
         Group {
             if pages.indices.contains(selectedPage) {
                 ReaderPageImage(index: selectedPage, viewport: viewport, preferences: preferences, continuous: false,
-                    tap: tapped, loaded: { savePosition() }, imageLoader: { try await loadImage(pages[selectedPage]) },
+                    tap: tapped, loaded: { loadedPages.insert(pages[selectedPage].id); savePosition() }, imageLoader: { try await loadImage(pages[selectedPage]) },
                     swipe: { delta in jump(to: selectedPage + delta) })
                     .id(pages[selectedPage].id)
             }
@@ -132,6 +152,7 @@ struct SourceChapterReader: View {
                     ForEach(Array(pages.enumerated()), id: \.element.id) { index, page in
                         ReaderPageImage(index: index, viewport: viewport, preferences: preferences, continuous: true,
                                         tap: tapped, loaded: {
+                                            loadedPages.insert(page.id)
                                             if let resume = pendingResume, resume.index == index {
                                                 Task { @MainActor in
                                                     await Task.yield()
@@ -155,6 +176,7 @@ struct SourceChapterReader: View {
                                 }
                             }
                     }
+                    Color.clear.frame(height: 1).onScrollVisibilityChange(threshold: 0.9) { endVisible = $0 }
                 }
             }
             .coordinateSpace(name: "readerScroll")

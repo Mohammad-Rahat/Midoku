@@ -10,8 +10,8 @@ let package = Package(
         .target(
             name: "MidokuExtensions", path: "Midoku",
             exclude: ["ContentView.swift", "MidokuApp.swift", "Info.plist", "plan.md", "Assets.xcassets",
-                      "Resources", "DesignSystem", "Development", "Extensions/Apple", "Settings/Apple"],
-            sources: ["Extensions/Core", "Settings/Core"]
+                      "Resources", "DesignSystem", "Development", "Extensions/Apple", "Settings/Apple", "Library/Apple"],
+            sources: ["Extensions/Core", "Settings/Core", "Library/Core"]
         ),
         .testTarget(
             name: "MidokuExtensionsTests",

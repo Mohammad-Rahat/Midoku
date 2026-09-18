@@ -2,7 +2,7 @@
 nonisolated enum BundledExtensionResources {
     static let entries: [(manifestJSON: String, javaScript: String)] = [
         (manifestJSON: #"""
-{"id":"dev.midoku.mangadex","name":"MangaDex","version":"0.2.0","contractVersion":2,"domains":["api.mangadex.org","mangadex.org","uploads.mangadex.org","*.mangadex.network"],"capabilities":["search","feeds","details","chapters","pages","filters"]}
+{"id":"dev.midoku.mangadex","name":"MangaDex","version":"0.2.1","contractVersion":2,"domains":["api.mangadex.org","mangadex.org","uploads.mangadex.org","*.mangadex.network"],"capabilities":["search","feeds","details","chapters","pages","filters"]}
 """#, javaScript: #"""
 var MidokuExtension = (() => {
   var __defProp = Object.defineProperty;
@@ -23,18 +23,18 @@ var MidokuExtension = (() => {
   };
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-  // midoku:/Users/raahat/Projects/PracticeProjects/Midoku/Extensions/sources/dev.midoku.mangadex/index.ts
+  // midoku:/workspace/scratch/e7e7937cc129/midoku-work/Extensions/sources/dev.midoku.mangadex/index.ts
   var index_exports = {};
   __export(index_exports, {
     default: () => index_default
   });
 
-  // midoku:/Users/raahat/Projects/PracticeProjects/Midoku/Extensions/sdk/index.ts
+  // midoku:/workspace/scratch/e7e7937cc129/midoku-work/Extensions/sdk/index.ts
   function defineExtension(extension) {
     return Object.freeze(extension);
   }
 
-  // midoku:/Users/raahat/Projects/PracticeProjects/Midoku/Extensions/sources/dev.midoku.mangadex/filters.ts
+  // midoku:/workspace/scratch/e7e7937cc129/midoku-work/Extensions/sources/dev.midoku.mangadex/filters.ts
   var options = (values) => values.map(([id, title]) => ({ id, title }));
   var languages = options([
     ["en", "English"],
@@ -150,7 +150,7 @@ var MidokuExtension = (() => {
     return result;
   }
 
-  // midoku:/Users/raahat/Projects/PracticeProjects/Midoku/Extensions/sources/dev.midoku.mangadex/index.ts
+  // midoku:/workspace/scratch/e7e7937cc129/midoku-work/Extensions/sources/dev.midoku.mangadex/index.ts
   var api = "https://api.mangadex.org";
   var referer = "https://mangadex.org/";
   var pageSize = 20;
@@ -298,6 +298,7 @@ var MidokuExtension = (() => {
       number,
       ordinal,
       language: translatedLanguage,
+      volume,
       groups: relationships(entry).filter((item) => item.type === "scanlation_group" && item.attributes != null).map((item) => text(object(item.attributes).name))
     };
   }

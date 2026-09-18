@@ -52,6 +52,8 @@ export interface Chapter {
     ordinal: number;
     language: string | null;
     groups?: string[];
+    volume?: string | null;
+    uploadedAt?: string | null;
 }
 export interface PageResource { id: string; url: string; headers: Record<string, string> }
 export interface Feed { id: string; title: string }
@@ -88,3 +90,4 @@ export async function getJSON<T>(host: Host, url: string): Promise<T> {
     // The caller still validates the source-specific schema. Swift validates normalized results.
     return JSON.parse(response.body) as T;
 }
+

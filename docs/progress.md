@@ -1,5 +1,20 @@
 # Development progress
 
+## 2026-09-18 (UTC) — Personal library, chapter curation and compact headers
+
+Implemented source-backed and empty library entries, persistent chapter clipboard,
+explicit paste conflict review, local entry/chapter edits and custom covers,
+alternatives, manual order, exclusions, categories, bulk actions and refresh. The
+reader follows an entry's canonical order across sources and keeps release-specific
+positions/completion; Home and History use that context. All tab roots use compact
+inline titles with toolbar actions beside them; the extra Settings intro row is removed.
+
+SQLite transactions migrate the previous settings JSON without deleting it. Full
+library backup v2 includes covers and composition while retaining v1 import support.
+See [library behavior and limits](library.md) for the implementation and remaining work.
+Native CI validation and simulator visual review are recorded after the build.
+
+
 ## 2026-09-18 (UTC) — Direct main delivery and IPA build
 
 At the user's request, the settings implementation was fast-forwarded directly

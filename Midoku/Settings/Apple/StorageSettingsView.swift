@@ -145,6 +145,8 @@ struct DownloadsListView: View {
 
 struct OfflineChapterReader: View {
     let download: SavedDownload
+    var entryID: UUID? = nil
+    var slotID: UUID? = nil
     @Environment(DownloadManager.self) private var downloads
     @Environment(AppSettingsStore.self) private var settings
     @Environment(\.scenePhase) private var phase
@@ -152,7 +154,13 @@ struct OfflineChapterReader: View {
     @State private var selected = 0
     @State private var device = ReaderDeviceController()
     @State private var showPreferences = false
-    private var preferences: ReaderPreferences { settings.snapshot.preferences.reader }
+    @State private var loadedPages: Set<String> = []
+    @State private var endVisible = false
+    private var preferences: ReaderPreferences { entryID.flatMap { settings.snapshot.library.entry($0)?.readerOverride } ?? settings.snapshot.preferences.reader }
+    private var reachedEnd: Bool {
+        guard let last = download.pages.last, loadedPages.contains(last.id), phase == .active else { return false }
+        return preferences.mode == .continuous ? endVisible : selected == download.pages.count - 1
+    }
     var body: some View {
         VStack(spacing: 0) {
             Text("\(download.record.sourceName) · Saved on this device")
@@ -166,6 +174,7 @@ struct OfflineChapterReader: View {
                                     image(page, index: index, size: geometry.size, continuous: true).id(index)
                                         .onScrollVisibilityChange(threshold: 0.5) { visible in if visible { selected = index } }
                                 }
+                                Color.clear.frame(height: 1).onScrollVisibilityChange(threshold: 0.9) { endVisible = $0 }
                             }
                         }.onAppear { proxy.scrollTo(selected, anchor: .top) }
                     }
@@ -186,7 +195,7 @@ struct OfflineChapterReader: View {
         .navigationTitle(download.record.mangaTitle).navigationBarTitleDisplayMode(.inline).toolbar(.hidden, for: .tabBar)
         .toolbar { Button { showPreferences = true } label: { Label("Reader preferences", systemImage: "slider.horizontal.3") } }
         .sheet(isPresented: $showPreferences) {
-            NavigationStack { ReaderSettingsView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showPreferences = false } } } }
+            NavigationStack { readerSettings.toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showPreferences = false } } } }
         }
         .onAppear {
             restoreGeneration = settings.restoreGeneration
@@ -195,22 +204,32 @@ struct OfflineChapterReader: View {
             }
             // A retained offline chapter may outlive a removed source after Replace restore.
             if settings.snapshot.connections.contains(where: { $0.id == download.record.identity.listing.connectionID }) {
-                var record = download.record; record.openedAt = Date()
+                var record = download.record; record.openedAt = Date(); record.entryID = entryID; record.slotID = slotID
                 settings.update { $0.opened(record) }
             }
             device.begin(preferences)
+        }
+        .task(id: reachedEnd) {
+            guard reachedEnd else { return }
+            do { try await Task.sleep(for: .seconds(1)); try Task.checkCancellation() } catch { return }
+            guard restoreGeneration == settings.restoreGeneration, settings.snapshot.connections.contains(where: { $0.id == download.record.identity.listing.connectionID }) else { return }
+            settings.update { $0.finished(download.record.id, entryID: entryID, slotID: slotID) }
         }
         .onChange(of: selected) { save() }
         .onChange(of: preferences) { device.apply(preferences) }
         .onChange(of: phase) { if phase == .active { device.apply(preferences) } else { save(); device.suspend() } }
         .onDisappear { save(); device.end() }
     }
+    @ViewBuilder private var readerSettings: some View {
+        if let entryID, settings.snapshot.library.entry(entryID)?.readerOverride != nil { EntryReaderSettingsView(entryID: entryID) }
+        else { ReaderSettingsView() }
+    }
     private func image(_ page: DownloadPage, index: Int, size: CGSize, continuous: Bool) -> some View {
         ReaderPageImage(index: index, viewport: size, preferences: preferences, continuous: continuous,
             tap: { fraction in
                 let delta = preferences.tapNavigation ? preferences.tapZones.action(at: fraction, mode: preferences.mode) : 0
                 selected = max(0, min(download.pages.count - 1, selected + delta))
-            }, loaded: {}, imageLoader: { try await downloads.image(page: page, chapterID: download.id) },
+            }, loaded: { loadedPages.insert(page.id) }, imageLoader: { try await downloads.image(page: page, chapterID: download.id) },
             swipe: { delta in selected = max(0, min(download.pages.count - 1, selected + delta)) })
     }
     private func save() {

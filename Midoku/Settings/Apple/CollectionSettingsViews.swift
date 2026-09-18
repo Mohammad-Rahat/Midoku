@@ -11,7 +11,7 @@ struct CategoriesSettingsView: View {
         List {
             if settings.snapshot.categories.isEmpty {
                 ContentUnavailableView("Make space for your favorites", systemImage: "folder.badge.plus",
-                    description: Text("Create categories for your future library, such as Reading or Weekend picks."))
+                    description: Text("Create categories for your library, such as Reading or Weekend picks."))
                     .listRowBackground(Color.clear)
             }
             Section {
@@ -33,7 +33,7 @@ struct CategoriesSettingsView: View {
                 }
                 .onMove { offsets, destination in settings.update { $0.categories.move(fromOffsets: offsets, toOffset: destination) } }
             } footer: {
-                Text("Categories keep their order across launches. Deleting a category never deletes its manga. Assignment will be available with the personal library.")
+                Text("Categories keep their order across launches. Deleting a category never deletes its manga. Assign entries from Library or Edit details.")
             }.listRowBackground(MidokuTheme.surface)
         }.settingsStyle().navigationTitle("Categories")
             .toolbar {
@@ -49,7 +49,7 @@ struct CategoriesSettingsView: View {
             }
             .confirmationDialog("Delete category?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
                 Button("Delete category", role: .destructive) {
-                    if let deleting { settings.update { $0.categories.removeAll { $0.id == deleting.id } } }
+                    if let deleting { settings.deleteCategory(deleting.id) }
                     deleting = nil
                 }
             } message: { Text("Only the category is removed. Your manga and reading progress are kept.") }
@@ -166,11 +166,12 @@ struct PinnedHomeView: View {
     @State private var refresh = 0
     var body: some View {
         Group {
-            if settings.snapshot.homeSections.filter(\.isVisible).isEmpty {
+            if settings.snapshot.homeSections.filter(\.isVisible).isEmpty && settings.snapshot.library.entries.isEmpty {
                 MidokuEmptyStateView(kind: .home, action: browse)
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 32) {
+                    LazyVStack(alignment: .leading, spacing: 24) {
+                        PersonalHomeSections(extensions: extensions)
                         ForEach(settings.snapshot.homeSections.filter(\.isVisible)) { section in
                             HomeShelf(section: section, extensions: extensions, refresh: refresh)
                         }
@@ -178,7 +179,7 @@ struct PinnedHomeView: View {
                 }.refreshable { refresh += 1 }
             }
         }
-        .background(MidokuTheme.background).navigationTitle("Home")
+        .background(MidokuTheme.background).navigationTitle("Home").navigationBarTitleDisplayMode(.inline)
         .toolbar {
             NavigationLink { HomeSectionsSettingsView() } label: { Label("Manage Home sections", systemImage: "slider.horizontal.3") }
         }
@@ -305,12 +306,13 @@ struct ReadingHistoryView: View {
                     }
                 }.settingsStyle()
             }
-        }.navigationTitle("History")
+        }.navigationTitle("History").navigationBarTitleDisplayMode(.inline)
     }
     private var days: [Date] { Array(Set(settings.snapshot.history.map { Calendar.current.startOfDay(for: $0.openedAt) })).sorted(by: >) }
 }
 
 private struct HistoryReaderDestination: View {
+    @Environment(AppSettingsStore.self) private var settings
     @Environment(DownloadManager.self) private var downloads
     let record: ReadingRecord
     let extensions: ExtensionEnvironment
@@ -318,7 +320,10 @@ private struct HistoryReaderDestination: View {
     @State private var failed = false
     var body: some View {
         Group {
-            if let saved = downloads.items.first(where: { $0.record.id == record.id && $0.status == .completed }) {
+            if let entryID = record.entryID, let slotID = record.slotID,
+               settings.snapshot.library.entry(entryID)?.slots.contains(where: { $0.id == slotID }) == true {
+                LibraryReaderView(entryID: entryID, initialSlotID: slotID, extensions: extensions)
+            } else if let saved = downloads.items.first(where: { $0.record.id == record.id && $0.status == .completed }) {
                 OfflineChapterReader(download: saved)
             } else if let adapter {
                 SourceChapterReader(mangaID: record.identity.listing.externalID, mangaTitle: record.mangaTitle,

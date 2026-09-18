@@ -16,7 +16,7 @@ final class AppSettingsStore {
 
     init(root: URL = URL.applicationSupportDirectory.appending(path: "Midoku", directoryHint: .isDirectory)) {
         self.root = root
-        persistence = SettingsPersistence(fileURL: root.appending(path: "app-settings.json"))
+        persistence = SettingsPersistence(fileURL: root.appending(path: "library.sqlite"), legacyJSON: root.appending(path: "app-settings.json"))
     }
 
     func load() async {
@@ -77,6 +77,27 @@ final class AppSettingsStore {
         try await persistence.save(candidate, revision: revision)
         snapshot = candidate
         saveError = nil
+    }
+
+    /// User-facing curation is published only after the complete transaction is durable.
+    func commit(_ edit: (inout AppSnapshot) throws -> Void) async throws {
+        guard isReady, !isRestoring else { throw SettingsFailure.storage }
+        var candidate = snapshot
+        try edit(&candidate)
+        try candidate.validate()
+        isRestoring = true
+        defer { isRestoring = false }
+        revision += 1
+        try await persistence.save(candidate, revision: revision)
+        snapshot = candidate
+        saveError = nil
+    }
+
+    func deleteCategory(_ id: UUID) {
+        update { state in
+            state.categories.removeAll { $0.id == id }
+            for index in state.library.entries.indices { state.library.entries[index].categoryIDs.remove(id) }
+        }
     }
 
     func dismissSaveError() { saveError = nil }

@@ -1,17 +1,26 @@
 import Foundation
 import CryptoKit
 
-/// A single atomic snapshot makes settings/source restore all-or-nothing. Never deletes an unreadable store.
+/// A transactional database snapshot keeps library/settings restore all-or-nothing.
 actor SettingsPersistence {
     let fileURL: URL
+    let legacyJSON: URL?
     private var savedRevision = -1
-    init(fileURL: URL) { self.fileURL = fileURL }
+    private var indexedState: Data?
+    init(fileURL: URL, legacyJSON: URL? = nil) { self.fileURL = fileURL; self.legacyJSON = legacyJSON }
 
     func load() throws -> AppSnapshot? {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
-        let data = try Data(contentsOf: fileURL)
-        guard data.count <= BackupArchive.maximumBytes else { throw SettingsFailure.tooLarge }
-        let snapshot = try JSONDecoder().decode(AppSnapshot.self, from: data)
+        if !FileManager.default.fileExists(atPath: fileURL.path) {
+            guard let legacyJSON, FileManager.default.fileExists(atPath: legacyJSON.path) else { return nil }
+            let data = try Data(contentsOf: legacyJSON)
+            guard data.count <= BackupArchive.maximumBytes else { throw SettingsFailure.tooLarge }
+            let snapshot = try JSONDecoder().decode(AppSnapshot.self, from: data)
+            try snapshot.validate()
+            try save(snapshot, revision: 0)
+            return snapshot
+        }
+        let database = try LibraryDatabase(url: fileURL)
+        let snapshot = try JSONDecoder().decode(AppSnapshot.self, from: database.read())
         try snapshot.validate()
         return snapshot
     }
@@ -22,12 +31,23 @@ actor SettingsPersistence {
         let data = try JSONEncoder().encode(snapshot)
         guard data.count <= BackupArchive.maximumBytes else { throw SettingsFailure.tooLarge }
         try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        #if os(iOS)
-        try data.write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-        #else
-        try data.write(to: fileURL, options: .atomic)
-        #endif
-        savedRevision = revision
+        let existed = FileManager.default.fileExists(atPath: fileURL.path)
+        do {
+            let database = try LibraryDatabase(url: fileURL)
+            #if os(iOS)
+            try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: fileURL.path)
+            #endif
+            // Reading-position writes do not rebuild the identity index.
+            let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+            let index = try encoder.encode(snapshot.library) + encoder.encode(snapshot.connections)
+            try database.write(snapshot, payload: data, rebuildIndex: indexedState != index)
+            indexedState = index
+            savedRevision = revision
+        } catch {
+            // Only remove our newly created, uncommitted database; never remove a user's existing store.
+            if !existed { try? FileManager.default.removeItem(at: fileURL) }
+            throw error
+        }
     }
 }
 
@@ -37,12 +57,18 @@ nonisolated struct BackupCounts: Codable, Equatable, Sendable {
     let homeSections: Int
     let history: Int
     let progress: Int
+    var libraryEntries: Int? = nil
+    var chapters: Int? = nil
+    var covers: Int? = nil
     init(_ snapshot: AppSnapshot) {
         sources = snapshot.connections.count
         categories = snapshot.categories.count
         homeSections = snapshot.homeSections.count
         history = snapshot.history.count
         progress = snapshot.progress.count
+        libraryEntries = snapshot.library.entries.count
+        chapters = snapshot.library.chapters.count
+        covers = snapshot.library.covers.count
     }
 }
 
@@ -74,7 +100,7 @@ nonisolated struct BackupArchive: Codable, Sendable {
         byteCount = payload.count
         sha256 = Self.digest(payload)
         format = "dev.midoku.settings-backup"
-        version = 1
+        version = 2
         exportedAt = Date()
         self.appVersion = appVersion
         self.extensions = extensions.map { ExtensionInventory(id: $0.id, version: $0.version) }
@@ -92,12 +118,14 @@ nonisolated struct BackupArchive: Codable, Sendable {
         do {
             let archive = try JSONDecoder().decode(Self.self, from: data)
             guard archive.format == "dev.midoku.settings-backup" else { throw SettingsFailure.invalidBackup }
-            guard archive.version == 1 else { throw SettingsFailure.futureVersion }
+            guard (1...2).contains(archive.version) else { throw SettingsFailure.futureVersion }
             guard archive.byteCount == archive.payload.count, archive.sha256 == digest(archive.payload),
                   archive.exportedAt.timeIntervalSince1970.isFinite, archive.extensions.count <= 1000 else { throw SettingsFailure.invalidBackup }
             let snapshot = try JSONDecoder().decode(AppSnapshot.self, from: archive.payload)
             try snapshot.validate()
-            guard archive.counts == BackupCounts(snapshot) else { throw SettingsFailure.invalidBackup }
+            var expected = BackupCounts(snapshot)
+            if archive.version == 1 { expected.libraryEntries = nil; expected.chapters = nil; expected.covers = nil }
+            guard archive.counts == expected else { throw SettingsFailure.invalidBackup }
             return (archive, snapshot)
         } catch let error as SettingsFailure { throw error }
         catch { throw SettingsFailure.invalidBackup }

@@ -4,6 +4,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var settings: AppSettingsStore
     @State private var extensions: ExtensionEnvironment
+    @State private var library: LibraryCoordinator
     @State private var downloads: DownloadManager
     @State private var lock = AppLockController()
     @State private var selectedTab = MidokuTab.home
@@ -16,10 +17,18 @@ struct ContentView: View {
     @State private var loadAttempt = 0
 
     init() {
-        let settings = AppSettingsStore()
+        let settings: AppSettingsStore
+        #if DEBUG
+        if CommandLine.arguments.contains("--library-preview") {
+            settings = AppSettingsStore(root: URL.applicationSupportDirectory.appending(path: "Midoku-UIPreview", directoryHint: .isDirectory))
+        } else { settings = AppSettingsStore() }
+        #else
+        settings = AppSettingsStore()
+        #endif
         _settings = State(initialValue: settings)
         let extensions = ExtensionEnvironment(settings: settings)
         _extensions = State(initialValue: extensions)
+        _library = State(initialValue: LibraryCoordinator(settings: settings, extensions: extensions))
         _downloads = State(initialValue: DownloadManager(extensions: extensions))
     }
 
@@ -40,7 +49,7 @@ struct ContentView: View {
         }
         .tint(settings.snapshot.preferences.accent.color)
         .environment(\.midokuAccentFill, settings.snapshot.preferences.accent.fill)
-        .environment(settings).environment(lock).environment(downloads)
+        .environment(settings).environment(lock).environment(downloads).environment(library)
         .preferredColorScheme(settings.snapshot.preferences.appearance.colorScheme)
         .foregroundStyle(MidokuTheme.primaryText).background(MidokuTheme.background)
         .task(id: loadAttempt) {
@@ -51,8 +60,18 @@ struct ContentView: View {
                 lock.configure(enabled: settings.snapshot.preferences.appLock)
                 initialized = true
             }
+            #if DEBUG
+            if CommandLine.arguments.contains("--library-preview") {
+                do {
+                    let id = try await LibraryPreviewData.prepare(settings)
+                    selectedTab = CommandLine.arguments.contains("--settings-preview") ? .settings : .library
+                    if CommandLine.arguments.contains("--entry-preview"), libraryPath.isEmpty { libraryPath.append(id) }
+                } catch { settings.update { _ in throw error } }
+            }
+            #endif
             await extensions.load()
             await downloads.load()
+            if settings.snapshot.preferences.refreshOnLaunch { await library.refresh(automatic: true) }
         }
         .onChange(of: scenePhase) {
             guard initialized else { return }
@@ -80,7 +99,8 @@ struct ContentView: View {
                 PinnedHomeView(extensions: extensions) { selectedTab = .browse }
             }.tabItem { Label(MidokuTab.home.title, systemImage: MidokuTab.home.systemImage) }.tag(MidokuTab.home)
             NavigationStack(path: $libraryPath) {
-                MidokuEmptyStateView(kind: .library) { selectedTab = .browse }.navigationTitle("Library")
+                LibraryView(extensions: extensions) { selectedTab = .browse }
+                    .navigationDestination(for: UUID.self) { LibraryEntryView(entryID: $0, extensions: extensions) }
             }.tabItem { Label(MidokuTab.library.title, systemImage: MidokuTab.library.systemImage) }.tag(MidokuTab.library)
             NavigationStack(path: $browsePath) {
                 SourceDirectoryView(extensions: extensions)

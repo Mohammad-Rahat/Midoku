@@ -6,6 +6,11 @@ struct SourceEntryView: View {
     let extensions: ExtensionEnvironment
     @Environment(DownloadManager.self) private var downloads
     @Environment(AppSettingsStore.self) private var settings
+    @Environment(LibraryCoordinator.self) private var library
+    @State private var adding = false
+    @State private var selecting = false
+    @State private var selected: Set<String> = []
+    @State private var actionMessage: String?
     @State private var details: MangaDetails?
     @State private var detailError: String?
     @State private var detailRetry = 0
@@ -51,6 +56,17 @@ struct SourceEntryView: View {
                 ProgressView("Loading entry").listRowBackground(MidokuTheme.surface)
             }
             if let details {
+                Section {
+                    let identity = SourceListingIdentity(connectionID: adapter.connection.id, externalID: summary.id)
+                    let listingID = settings.snapshot.library.listings.first { $0.identity == identity }?.id
+                    let existing = settings.snapshot.library.entries.filter { entry in entry.links.contains { $0.listingID == listingID } }
+                    if existing.isEmpty {
+                        Button("Add to library", systemImage: "plus") { adding = true }.buttonStyle(.borderedProminent)
+                    } else {
+                        ForEach(existing) { entry in NavigationLink { LibraryEntryView(entryID: entry.id, extensions: extensions) } label: { Label("Open \(settings.snapshot.library.title(entry))", systemImage: "books.vertical") } }
+                    }
+                    if let actionMessage { Text(actionMessage).font(.caption).foregroundStyle(MidokuTheme.secondaryText) }
+                }.listRowBackground(MidokuTheme.surface)
                 Section("About") {
                     SourceDescriptionView(text: details.description)
                     if let authors = details.authors, !authors.isEmpty {
@@ -94,6 +110,7 @@ struct SourceEntryView: View {
                     } else {
                         ForEach(chapters.items) { chapter in
                             HStack(spacing: 8) {
+                                if selecting { Button { if !selected.insert(chapter.id).inserted { selected.remove(chapter.id) } } label: { Image(systemName: selected.contains(chapter.id) ? "checkmark.circle.fill" : "circle").frame(minWidth: 44, minHeight: 44) }.buttonStyle(.borderless).accessibilityLabel("Select \(chapter.title)") }
                                 NavigationLink {
                                     ChapterReaderDestination(mangaID: summary.id, mangaTitle: details?.title ?? summary.title,
                                         chapter: chapter, adapter: adapter, extensions: extensions)
@@ -114,6 +131,9 @@ struct SourceEntryView: View {
                                     }
                                 }.disabled(!adapter.manifest.capabilities.contains(.pages))
                                 Menu {
+                                    Button("Copy chapter", systemImage: "doc.on.doc") { copy([chapter]) }
+                                    Button(settings.snapshot.library.completed.contains(chapterIdentity(chapter)) ? "Mark unread" : "Mark read", systemImage: "checkmark.circle") { mark(chapter) }
+                                    Button("Select", systemImage: "checkmark.circle") { selecting = true; selected.insert(chapter.id) }
                                     Button("Download chapter", systemImage: "arrow.down.circle") { download(chapter) }
                                         .disabled(!adapter.manifest.capabilities.contains(.pages) || !downloads.isReady || downloadStatus(chapter) != nil)
                                     NavigationLink("Manage downloads") { DownloadsListView() }
@@ -144,7 +164,22 @@ struct SourceEntryView: View {
             }
         }
         .scrollContentBackground(.hidden).background(MidokuTheme.background)
-        .toolbar { NavigationLink { DownloadsListView() } label: { Label("Downloads", systemImage: "arrow.down.circle") } }
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button(selecting ? "Done" : "Select") { selecting.toggle(); selected.removeAll() }
+                NavigationLink { ClipboardView() } label: { Label("Chapter clipboard", systemImage: "doc.on.clipboard") }
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if selecting {
+                HStack {
+                    Button("Select loaded") { selected = Set(chapters.items.map(\.id)) }
+                    Spacer()
+                    Button("Copy (\(selected.count))") { copy(chapters.items.filter { selected.contains($0.id) }) }.disabled(selected.isEmpty)
+                }.padding().background(MidokuTheme.surface)
+            }
+        }
+        .sheet(isPresented: $adding) { AddSourceEntryView(adapter: adapter, mangaID: summary.id, title: details?.title ?? summary.title, language: chapterLanguage.isEmpty ? nil : chapterLanguage, extensions: extensions) }
         .navigationTitle("Entry")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: detailRetry) {
@@ -181,6 +216,21 @@ struct SourceEntryView: View {
             }
         }
     }
+    private func copy(_ records: [ChapterRecord]) {
+        guard let details else { return }
+        Task {
+            do { try await library.copy(details: details, connection: adapter.connection, chapters: records); actionMessage = "Copied \(records.count) chapters. Open the clipboard to choose a library entry."; selecting = false; selected.removeAll() }
+            catch { actionMessage = error.localizedDescription }
+        }
+    }
+    private func mark(_ chapter: ChapterRecord) {
+        let id = chapterIdentity(chapter)
+        settings.update { state in
+            if state.library.completed.contains(id) { state.library.completed.remove(id); state.progress.removeAll { $0.id == id } }
+            else { state.library.completed.insert(id) }
+        }
+    }
+
 }
 
 private struct SourceEntryHeader: View {
