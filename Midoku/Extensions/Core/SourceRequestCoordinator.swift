@@ -4,59 +4,14 @@ protocol SourceHTTPTransport: Sendable {
     func send(_ request: URLRequest, maximumBytes: Int) async throws -> SourceHTTPResponse
 }
 
-/// Redirects are returned to the coordinator for permission and cookie revalidation.
-nonisolated private final class NoRedirectDelegate: NSObject, URLSessionTaskDelegate, Sendable {
-    func urlSession(
-        _ session: URLSession,
-        task: URLSessionTask,
-        willPerformHTTPRedirection response: HTTPURLResponse,
-        newRequest request: URLRequest,
-        completionHandler: @escaping @Sendable (URLRequest?) -> Void
-    ) {
-        completionHandler(nil)
-    }
-}
-
-nonisolated final class URLSessionSourceTransport: SourceHTTPTransport, Sendable {
-    private let session: URLSession
-
-    init() {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.httpCookieStorage = nil
-        configuration.httpShouldSetCookies = false
-        configuration.urlCredentialStorage = nil
-        configuration.urlCache = nil
-        configuration.timeoutIntervalForRequest = 20
-        configuration.timeoutIntervalForResource = 30
-        session = URLSession(configuration: configuration, delegate: NoRedirectDelegate(), delegateQueue: nil)
-    }
-
-    func send(_ request: URLRequest, maximumBytes: Int) async throws -> SourceHTTPResponse {
-        let (bytes, response) = try await session.bytes(for: request)
-        guard let response = response as? HTTPURLResponse, let url = response.url else {
-            throw ExtensionFailure.invalidResponse("Non-HTTP response.")
-        }
-        guard response.expectedContentLength <= Int64(maximumBytes) else {
-            throw ExtensionFailure.responseTooLarge
-        }
-        var body = Data()
-        for try await byte in bytes {
-            guard body.count < maximumBytes else { throw ExtensionFailure.responseTooLarge }
-            body.append(byte)
-        }
-        var headers: [String: String] = [:]
-        for (key, value) in response.allHeaderFields {
-            headers[String(describing: key).lowercased()] = String(describing: value)
-        }
-        return SourceHTTPResponse(url: url, status: response.statusCode, headers: headers, body: body)
-    }
-}
+nonisolated enum SourceRequestKind: Sendable { case metadata, image }
 
 actor SourceRequestCoordinator {
     private let transport: any SourceHTTPTransport
     private let sessions: any SourceSessionProviding
     private let verification: any ChallengeResolving
     private let minimumSpacing: Duration
+    private var waitingMetadata: [UUID: Int] = [:]
     private var activeConnections = Set<UUID>()
     private var nextRequest: [UUID: ContinuousClock.Instant] = [:]
 
@@ -76,7 +31,8 @@ actor SourceRequestCoordinator {
         _ input: SourceHTTPRequest,
         connection: SourceConnection,
         manifest: ExtensionManifest,
-        interaction: VerificationInteraction
+        interaction: VerificationInteraction,
+        kind: SourceRequestKind = .metadata
     ) async throws -> SourceHTTPResponse {
         guard connection.isEnabled, connection.extensionID == manifest.id else {
             throw ExtensionFailure.requestNotAllowed
@@ -87,10 +43,18 @@ actor SourceRequestCoordinator {
         try policy.validate(headers: input.headers)
 
         // One request/verification flow per connection. Other sources remain independent.
-        while activeConnections.contains(connection.id) {
-            try await Task.sleep(for: .milliseconds(50))
+        if kind == .metadata { waitingMetadata[connection.id, default: 0] += 1 }
+        do {
+            while activeConnections.contains(connection.id) ||
+                (kind == .image && waitingMetadata[connection.id, default: 0] > 0) {
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            try Task.checkCancellation()
+        } catch {
+            if kind == .metadata { waitingMetadata[connection.id, default: 0] -= 1 }
+            throw error
         }
-        try Task.checkCancellation()
+        if kind == .metadata { waitingMetadata[connection.id, default: 0] -= 1 }
         activeConnections.insert(connection.id)
         defer { activeConnections.remove(connection.id) }
 
@@ -115,7 +79,7 @@ actor SourceRequestCoordinator {
             for (key, value) in try await sessions.headers(for: currentURL, connectionID: connection.id) {
                 request.setValue(value, forHTTPHeaderField: key)
             }
-            let response = try await transport.send(request, maximumBytes: 8 * 1024 * 1024)
+            let response = try await transport.send(request, maximumBytes: (kind == .image ? 32 : 8) * 1024 * 1024)
             try Task.checkCancellation()
             try policy.validate(response.url)
             guard response.url == currentURL else {

@@ -66,6 +66,14 @@ test("MangaDex details prefer English and preserve IDs when locators change", as
     const response = await fixture("details");
     const first = await adapter.getMangaDetails({ mangaID }, host(response));
     assert.equal(first.description, "Synthetic API fixture for Midoku.");
+    assert.deepEqual(plain(first.authors), ["Fixture Author"]);
+    assert.deepEqual(plain(first.artists), ["Fixture Artist"]);
+    assert.deepEqual(plain(first.tags), ["Adventure"]);
+    assert.deepEqual(plain(first.availableLanguages), [{ id: "en", title: "English" }, { id: "es", title: "Spanish" }]);
+    assert.equal(first.defaultChapterLanguage, "en");
+    assert.equal(first.status, "ongoing");
+    assert.equal(first.year, "2024");
+    assert.equal(first.webURL, `https://mangadex.org/title/${mangaID}`);
     response.data.relationships[0].attributes.fileName = "changed-cover.png";
     const second = await adapter.getMangaDetails({ mangaID }, host(response));
     assert.equal(first.id, second.id);
@@ -85,6 +93,7 @@ test("MangaDex chapters preserve fractional numbers and releases, filter unreada
     assert.deepEqual(plain(page.items.map(item => item.number)), ["20.5", "20.5", null]);
     assert.deepEqual(plain(page.items.map(item => item.ordinal)), [0, 1, 4]);
     assert.equal(page.items[2].title, "Oneshot");
+    assert.deepEqual(plain(page.items[0].groups), ["Fixture Scanlation Group"]);
     assert.equal(new Set(page.items.map(item => item.id)).size, 3);
     assert.equal(page.nextCursor, "100");
     const params = new URL(network.requests[0].url).searchParams;
@@ -99,6 +108,78 @@ test("MangaDex chapters preserve fractional numbers and releases, filter unreada
     const filtered = await adapter.getChapterPage({ mangaID }, host(response));
     assert.equal(filtered.items.length, 0);
     assert.equal(filtered.nextCursor, "100");
+});
+
+test("MangaDex filter definitions expose valid defaults and live stable tag IDs", async () => {
+    const adapter = await load();
+    const network = host(await fixture("tags"));
+    const filters = await adapter.getSearchFilters({}, network);
+    assert.equal(new URL(network.requests[0].url).pathname, "/manga/tag");
+    assert.deepEqual(plain(filters.find(item => item.id === "includedTags").options), [
+        { id: "00000080-1111-4111-8111-000000000080", title: "Adventure" },
+        { id: "00000081-1111-4111-8111-000000000081", title: "Comedy" }
+    ]);
+    for (const filter of filters) {
+        assert.equal(new Set(filter.options.map(item => item.id)).size, filter.options.length);
+        assert.ok(filter.defaults.every(id => filter.options.some(item => item.id === id)));
+        if (filter.required) assert.ok(filter.defaults.length);
+    }
+    assert.deepEqual(plain(filters.find(item => item.id === "sort").scopes), ["search"]);
+});
+
+test("MangaDex search and feed filters encode arrays while preserving feed ordering and pagination", async () => {
+    const adapter = await load();
+    const filters = {
+        sort: ["title:asc"], language: ["es"], rating: ["safe"], status: ["completed", "hiatus"],
+        demographic: ["seinen"], originalLanguage: ["ko"],
+        includedTags: ["00000080-1111-4111-8111-000000000080"], includedTagsMode: ["OR"],
+        excludedTags: ["00000081-1111-4111-8111-000000000081"], excludedTagsMode: ["AND"]
+    };
+    const response = await fixture("search");
+    const network = host(response, { ...response, offset: 20 }, response);
+    const result = await adapter.search({ query: "", filters }, network);
+    assert.equal(result.items[0].preferredChapterLanguage, "es");
+    await adapter.search({ query: "", cursor: "20", filters }, network);
+    await adapter.getFeedPage({ feedID: "popular", filters }, network);
+    for (const request of network.requests) {
+        const p = new URL(request.url).searchParams;
+        assert.equal(p.has("title"), false);
+        assert.equal(p.get("availableTranslatedLanguage[]"), "es");
+        assert.deepEqual(p.getAll("status[]"), ["completed", "hiatus"]);
+        assert.deepEqual(p.getAll("contentRating[]"), ["safe"]);
+        assert.equal(p.get("originalLanguage[]"), "ko");
+        assert.equal(p.get("publicationDemographic[]"), "seinen");
+        assert.equal(p.get("includedTags[]"), filters.includedTags[0]);
+        assert.equal(p.get("excludedTags[]"), filters.excludedTags[0]);
+        assert.equal(p.get("includedTagsMode"), "OR");
+        assert.equal(p.get("excludedTagsMode"), "AND");
+    }
+    assert.equal(new URL(network.requests[1].url).searchParams.get("offset"), "20");
+    assert.equal(new URL(network.requests[0].url).searchParams.get("order[title]"), "asc");
+    assert.equal(new URL(network.requests[2].url).searchParams.get("order[followedCount]"), "desc");
+    assert.equal(new URL(network.requests[2].url).searchParams.has("order[title]"), false);
+});
+
+test("MangaDex invalid filter values fail before issuing HTTP requests", async () => {
+    const adapter = await load();
+    for (const filters of [{ sort: ["inject:asc"] }, { rating: [] }, { language: ["en", "es"] },
+        { language: ["bad"] }, { unknown: ["x"] }, { includedTags: ["../tag"] }, { status: "completed" }]) {
+        await assert.rejects(adapter.search({ query: "x", filters }, host()));
+    }
+});
+
+test("MangaDex selected chapter language also opens pages without an English-only restriction", async () => {
+    const adapter = await load();
+    const response = await fixture("chapters");
+    response.data[0].attributes.translatedLanguage = "es";
+    const network = host(response);
+    const result = await adapter.getChapterPage({ mangaID, language: "es" }, network);
+    assert.deepEqual(plain(result.items.map(item => item.id)), [chapterID]);
+    assert.equal(new URL(network.requests[0].url).searchParams.get("translatedLanguage[]"), "es");
+    const metadata = await fixture("chapter");
+    metadata.data.attributes.translatedLanguage = "es";
+    const pages = await adapter.getChapterPages({ mangaID, chapterID }, host(metadata, await fixture("pages")));
+    assert.equal(pages.length, 2);
 });
 
 test("MangaDex pages validate parent identity and return ordered original-quality CDN descriptors", async () => {

@@ -1,5 +1,76 @@
 # Development progress
 
+## 2026-09-19 — Source browsing, filters, entries, and direct reading
+
+### Implemented
+
+- MangaDex 0.2.0 uses contract 2. The host retains contract-1 compatibility and
+  persistent connection/content IDs. The SDK, scaffold, manifest validation,
+  generated bundle and extension author guide describe the new contract.
+- Source-defined Latest updates, Popular, Recently added, and Search tabs; visible
+  search input; cancellable 300 ms debounce and immediate submission; real cover
+  grids; empty/error/retry states; pull refresh and cursor pagination.
+- Source-defined filter sheets with Apply, Cancel and Reset. MangaDex supports
+  sorting, chapter language, publication status, demographic, original language,
+  content rating and included/excluded tags with all/any matching. Feed ordering
+  remains owned by its feed. Filter options come from the adapter, never source
+  names in SwiftUI; live tag IDs come from the MangaDex API.
+- Entry navigation with normalized title/description/cover, authors/artists,
+  status/year, tags, source link, labelled chapter-language choices, scanlation
+  credits and paginated chapters. The selected browse language carries into the
+  entry. Existing query/results/chapter language/scroll survive detail back navigation.
+- Direct source chapter reading: real page images, Previous/Next, page picker,
+  pinch zoom and visible zoom alternatives, loading/error/retry states and credits.
+- Shared connection-scoped image loading, ImageIO downsampling off the main actor,
+  and a 64 MiB memory cache. Image requests use the existing permission/session/
+  verification coordinator and retain page Referer headers.
+- Bounded URLSession delegate chunks replace byte-by-byte body collection; 8 MiB
+  metadata / 32 MiB native image limits and cancellation cleanup. Pending metadata
+  takes priority over queued images. Existing request spacing and verification
+  limits remain in force.
+- A shared observable page store prevents old searches or old pagination from
+  replacing a new selection, deduplicates moving feeds, detects cursor loops,
+  retains failed-refresh content and releases loading state on cancellation.
+
+### Verified
+
+- `npm ci` followed by `npm test` passes: TypeScript typechecking, bundling and
+  16 Node tests, including filter defaults/IDs, parameter encoding, feed ordering,
+  pagination, metadata/credits, selected-language chapters and page resolution.
+- 24 Swift Testing checks in seven suites pass. New checks cover stale search and
+  pagination races, cursor loops, deduplication, retry/cancellation state, bounded
+  chunk transport and cancellation before any server response. Native integration
+  exercises all seven adapter methods through the checked-in JavaScriptCore bundle.
+- Xcode BuildProject succeeds without build errors. The existing registry warning
+  about the JavaScript runtime initializer's default actor isolation remains;
+  the bootstrap constant is explicitly nonisolated. No deployment/signing changes.
+- iPhone 16 Pro Max simulator: all three feeds render distinct live results;
+  rapid Yotsuba search opens the exact Yotsuba&! entry, with real metadata/covers.
+  Filter Cancel preserves prior values, Apply changes results, and Reset restores
+  defaults. English Chapter 1 opens actual page 1 and Next loads distinct page 2
+  with the counter advancing to 2/48. Initial images took roughly 6–9 seconds on
+  this simulator/network; this is not a physical-device performance benchmark.
+- Source and entry back navigation retain query, results, language and scroll.
+  Refresh completes in both Latest updates and Search. Device testing caught and
+  fixed a hidden search field, oversized cover layout, cancellation leaving a
+  stale refresh notice, low-contrast reader loaders, and deep-scroll grid handling.
+- Final simulator pass confirms deep-scroll feed switching returns to the first
+  row without a blank grid, and Load more keeps existing card positions while
+  appending results. No remaining observed layout defects or crashes. The device
+  session was closed with the original Xcode destination retained.
+- The Node live smoke script now includes filter definitions; it was not rerun in
+  this milestone because the native simulator exercised live API and image paths.
+
+### Remaining scope
+
+This completes the requested source browse/search/filter/entry path, with basic
+direct chapter reading. Personal-library creation/composition, persistent reading
+progress/history, downloads/offline reading, additional reader modes, account sync,
+and saving filter choices across launches remain product work. Comix is not
+implemented. Physical-device protected-source verification and real Cloudflare
+challenge/session continuity remain unverified; successful MangaDex reading is
+not a claim of universal clearance.
+
 ## 2026-09-18 — Bundled MangaDex testing adapter
 
 ### Implemented
@@ -40,8 +111,8 @@
 ### Scope and remaining checks
 
 MangaDex is available for testing through Settings → Extensions → Add, then Browse.
-The current UI displays the first search page; details, feed, reader, and search
-pagination screens remain app milestones even though their adapter methods work.
+At this milestone the UI displayed the first search page only. The 2026-09-19
+entry above supersedes that UI limitation.
 No real Cloudflare challenge was solved, and physical-device protected-source
 metadata/image session continuity remains unverified. Comix is not implemented.
 The source notes record language/content defaults, the 10,000-result API window,
@@ -185,10 +256,10 @@ contract. esbuild still performs the TypeScript compilation and bundling.
   Fixture chapter checks do not prove mixed-source composition or restart persistence.
 - Reader modes, images/downloads, progress/history, Home feeds, full search/filter
   UI, categories, app lock, appearance, backups, and release polish.
-- Live MangaDex/Comix adapters. Confirm Comix's canonical domain before development.
+- Comix adapter (MangaDex is now implemented). Confirm Comix's canonical domain before development.
 - Real Cloudflare verification and metadata/image session continuity on physical
   devices. No live-source clearance was attempted or established here.
-- HTML parser helpers, filters/settings/auth schemas, non-GET and streaming host
+- HTML parser helpers, settings/auth schemas, non-GET and streaming host
   operations as required by researched sources.
 - Distribution route, signed remote catalogues/packages, safe staging/activation,
   updates/rollback/key rotation, and a stronger runtime boundary before considering

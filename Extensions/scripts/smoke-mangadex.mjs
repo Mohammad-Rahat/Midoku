@@ -46,6 +46,8 @@ const host = {
 };
 
 const feeds = await adapter.getFeeds({}, host);
+const filters = await adapter.getSearchFilters({}, host);
+assert.ok(filters.some(filter => filter.id === "includedTags" && filter.options.length > 0));
 const feed = await adapter.getFeedPage({ feedID: "popular", cursor: null }, host);
 const search = await adapter.search({ query: process.argv[2] || "Yotsuba", cursor: null }, host);
 const manga = search.items[0] ?? feed.items[0];
@@ -68,7 +70,7 @@ for await (const chunk of image.body) {
 }
 assert.ok(imageBytes > 0);
 console.log(JSON.stringify({
-    source: manifest.name, title: details.title, feeds: feeds.length,
+    source: manifest.name, title: details.title, feeds: feeds.length, filters: filters.length,
     searchResults: search.items.length, feedResults: feed.items.length,
     chaptersInPage: chapters.items.length, pageCount: pages.length,
     firstImageBytes: imageBytes, requests: count

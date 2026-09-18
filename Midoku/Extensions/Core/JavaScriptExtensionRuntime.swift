@@ -12,6 +12,7 @@ protocol ExtensionRuntime: Sendable {
 actor JavaScriptExtensionRuntime: ExtensionRuntime {
     private let maximumJSONBytes = 4 * 1024 * 1024
 
+
     func validate(bundle: String, manifest: ExtensionManifest) throws {
         try manifest.validate()
         let context = try makeContext(bundle: bundle)
@@ -133,7 +134,7 @@ actor JavaScriptExtensionRuntime: ExtensionRuntime {
         let json: String?
     }
 
-    private static let bootstrap = """
+    nonisolated private static let bootstrap = """
         globalThis.__midoku = (() => {
             let sequence = 0, result = null;
             const jobs = [], pending = new Map();

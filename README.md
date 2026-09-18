@@ -7,13 +7,13 @@ Native manga reader in development. Read [the product plan](Midoku/plan.md) and
 
 Open `Midoku.xcodeproj` in Xcode. The current project uses Xcode 27's JSON-style
 `project.xcproj` format. The existing app target, signing configuration, bundle ID,
-and iOS 27.2 deployment setting are preserved.
+and configured deployment setting are preserved.
 
 The app currently has the five-tab navigation shell and a source-independent extension
 foundation. Settings → Extensions manages registered bundled sources. In Debug builds,
 Settings → Extension Lab runs the two offline TypeScript fixtures through JavaScriptCore.
-MangaDex is bundled for testing: add it in Settings → Extensions, then search from
-Browse → MangaDex. There is no remote extension installer yet.
+MangaDex is bundled for testing: add it in Settings → Extensions, then open
+Browse → MangaDex for feeds, search, filters, entry details, chapters, and direct reading. There is no remote extension installer yet.
 
 The supplied [UI design kit and Midoku brand assets](docs/design/README.md) are
 stored in the repository. The app uses their icon, adaptive palette, and empty-state

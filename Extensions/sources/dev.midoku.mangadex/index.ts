@@ -1,13 +1,12 @@
 import { defineExtension, type Host, type MangaSummary, type Chapter, type Page } from "../../sdk/index";
+import { staticFilters, tagFilters, searchParameters, languages } from "./filters";
 
 const api = "https://api.mangadex.org";
 const referer = "https://mangadex.org/";
 const pageSize = 20;
 const chapterPageSize = 100;
 const maximumResults = 10_000;
-// Contract 1 has no source settings yet. These defaults are documented in README.md.
 const language = "en";
-const ratings: [string, string][] = [["contentRating[]", "safe"], ["contentRating[]", "suggestive"]];
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 type ObjectValue = Record<string, unknown>;
 type Parameter = [string, string];
@@ -136,13 +135,14 @@ async function mangaPage(host: Host, cursor: string | null | undefined, paramete
     const limit = Math.min(pageSize, maximumResults - offset);
     const response = await get(host, "/manga", [
         ["limit", String(limit)], ["offset", String(offset)], ["includes[]", "cover_art"],
-        ["hasAvailableChapters", "true"], ["availableTranslatedLanguage[]", language], ...ratings, ...parameters
+        ...parameters
     ]);
     const page = collection(response, offset, limit);
-    return { items: unique(page.items.map(summary)), nextCursor: page.nextCursor };
+    const preferredChapterLanguage = parameters.find(([key]) => key === "availableTranslatedLanguage[]")?.[1] ?? language;
+    return { items: unique(page.items.map(value => ({ ...summary(value), preferredChapterLanguage }))), nextCursor: page.nextCursor };
 }
 
-function chapter(value: unknown, mangaID: string, ordinal: number): Chapter | null {
+function chapter(value: unknown, mangaID: string, ordinal: number, requestedLanguage?: string): Chapter | null {
     const entry = entity(value, "chapter");
     const attributes = object(entry.attributes);
     const parent = relationships(entry).find(item => item.type === "manga");
@@ -153,14 +153,16 @@ function chapter(value: unknown, mangaID: string, ordinal: number): Chapter | nu
     }
     if (optionalText(attributes.externalUrl) !== null || attributes.isUnavailable === true || integer(attributes.pages) === 0) return null;
     const translatedLanguage = text(attributes.translatedLanguage);
-    if (translatedLanguage !== language) return null;
+    if (requestedLanguage && translatedLanguage !== requestedLanguage) return null;
     const number = optionalText(attributes.chapter);
     const volume = optionalText(attributes.volume);
     const fallback = number === null ? "Oneshot" : `Chapter ${number}`;
     const title = optionalText(attributes.title) ?? fallback;
     return {
         id: uuid(entry.id), title: volume === null ? title : `Vol. ${volume} · ${title}`,
-        number, ordinal, language: translatedLanguage
+        number, ordinal, language: translatedLanguage,
+        groups: relationships(entry).filter(item => item.type === "scanlation_group" && item.attributes != null)
+            .map(item => text(object(item.attributes).name))
     };
 }
 
@@ -178,8 +180,19 @@ function imageBase(value: unknown): string {
 }
 
 export default defineExtension({
-    async search({ query, cursor }, host) {
-        return mangaPage(host, cursor, [["title", query.trim()], ["order[relevance]", "desc"]]);
+    async getSearchFilters(_, host) {
+        const result = await get(host, "/manga/tag");
+        if (!Array.isArray(result.data)) throw new Error("Missing tags");
+        const tags = result.data.map(value => {
+            const tag = entity(value, "tag");
+            return { id: uuid(tag.id), title: localized([object(object(tag.attributes).name)], [language]) ?? "Tag" };
+        }).sort((a, b) => a.title.localeCompare(b.title));
+        return [...staticFilters, ...tagFilters(unique(tags))];
+    },
+    async search({ query, cursor, filters }, host) {
+        const parameters = searchParameters(filters);
+        if (query.trim()) parameters.push(["title", query.trim()]);
+        return mangaPage(host, cursor, parameters);
     },
     async getFeeds() {
         return [
@@ -188,32 +201,50 @@ export default defineExtension({
             { id: "recent", title: "Recently added" }
         ];
     },
-    async getFeedPage({ feedID, cursor }, host) {
+    async getFeedPage({ feedID, cursor, filters }, host) {
         const sort = feedID === "latest" ? "latestUploadedChapter"
             : feedID === "popular" ? "followedCount" : feedID === "recent" ? "createdAt" : null;
         if (!sort) throw new Error("Unknown MangaDex feed");
-        return mangaPage(host, cursor, [[`order[${sort}]`, "desc"]]);
+        return mangaPage(host, cursor, searchParameters(filters, `${sort}:desc`));
     },
     async getMangaDetails({ mangaID }, host) {
         uuid(mangaID);
-        const response = await get(host, `/manga/${mangaID}`, [["includes[]", "cover_art"]]);
+        const response = await get(host, `/manga/${mangaID}`, [["includes[]", "cover_art"], ["includes[]", "author"], ["includes[]", "artist"]]);
         const manga = entity(response.data, "manga");
         if (manga.id !== mangaID) throw new Error("Manga ID mismatch");
         const attributes = object(manga.attributes);
-        return { ...summary(manga), description: localized([object(attributes.description)], [language]) ?? "" };
+        const names = (type: string) => relationships(manga).filter(item => item.type === type && item.attributes != null)
+            .map(item => text(object(item.attributes).name));
+        const availableLanguages = attributes.availableTranslatedLanguages == null ? [language]
+            : (attributes.availableTranslatedLanguages as unknown[]).filter((value): value is string => typeof value === "string" && /^[a-z-]{2,8}$/.test(value));
+        const tags = attributes.tags == null ? [] : (attributes.tags as unknown[]).map(value =>
+            localized([object(object(object(value).attributes).name)], [language]) ?? "Tag");
+        return {
+            ...summary(manga), description: localized([object(attributes.description)], [language]) ?? "",
+            authors: names("author"), artists: names("artist"), tags,
+            status: optionalText(attributes.status), year: attributes.year == null ? null : String(integer(attributes.year)),
+            availableLanguages: [...new Set(availableLanguages)].map(id =>
+                ({ id, title: languages.find(option => option.id === id)?.title ?? id })),
+            defaultChapterLanguage: availableLanguages.includes(language) ? language : availableLanguages[0] ?? language,
+            webURL: `https://mangadex.org/title/${mangaID}`
+        };
     },
-    async getChapterPage({ mangaID, cursor }, host) {
+    async getChapterPage({ mangaID, cursor, language: selectedLanguage }, host) {
         uuid(mangaID);
+        const chapterLanguage = selectedLanguage ?? language;
+        if (!/^[a-z]{2}(-[a-z]{2,3})?$/.test(chapterLanguage)) throw new Error("Invalid chapter language");
         const offset = offsetFrom(cursor);
         const limit = Math.min(chapterPageSize, maximumResults - offset);
         const response = await get(host, `/manga/${mangaID}/feed`, [
-            ["limit", String(limit)], ["offset", String(offset)], ["translatedLanguage[]", language],
+            ["limit", String(limit)], ["offset", String(offset)], ["translatedLanguage[]", chapterLanguage],
+            ["includes[]", "scanlation_group"],
             ["order[volume]", "asc"], ["order[chapter]", "asc"], ["order[createdAt]", "asc"],
             ["includeExternalUrl", "0"], ["includeUnavailable", "0"], ["includeEmptyPages", "0"],
-            ["includeFutureUpdates", "0"], ["includeFuturePublishAt", "0"], ...ratings
+            ["includeFutureUpdates", "0"], ["includeFuturePublishAt", "0"],
+            ...["safe", "suggestive", "erotica", "pornographic"].map(value => ["contentRating[]", value] as Parameter)
         ]);
         const page = collection(response, offset, limit);
-        const items = page.items.map((value, index) => chapter(value, mangaID, offset + index))
+        const items = page.items.map((value, index) => chapter(value, mangaID, offset + index, chapterLanguage))
             .filter((value): value is Chapter => value !== null);
         // Advance by the source page, even if every entry was deliberately filtered out.
         return { items: unique(items), nextCursor: page.nextCursor };

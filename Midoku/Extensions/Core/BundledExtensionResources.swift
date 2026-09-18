@@ -2,7 +2,7 @@
 nonisolated enum BundledExtensionResources {
     static let entries: [(manifestJSON: String, javaScript: String)] = [
         (manifestJSON: #"""
-{"id":"dev.midoku.mangadex","name":"MangaDex","version":"0.1.0","contractVersion":1,"domains":["api.mangadex.org","mangadex.org","uploads.mangadex.org","*.mangadex.network"],"capabilities":["search","feeds","details","chapters","pages"]}
+{"id":"dev.midoku.mangadex","name":"MangaDex","version":"0.2.0","contractVersion":2,"domains":["api.mangadex.org","mangadex.org","uploads.mangadex.org","*.mangadex.network"],"capabilities":["search","feeds","details","chapters","pages","filters"]}
 """#, javaScript: #"""
 var MidokuExtension = (() => {
   var __defProp = Object.defineProperty;
@@ -34,6 +34,122 @@ var MidokuExtension = (() => {
     return Object.freeze(extension);
   }
 
+  // midoku:/Users/raahat/Projects/PracticeProjects/Midoku/Extensions/sources/dev.midoku.mangadex/filters.ts
+  var options = (values) => values.map(([id, title]) => ({ id, title }));
+  var languages = options([
+    ["en", "English"],
+    ["ja", "Japanese"],
+    ["ko", "Korean"],
+    ["zh", "Chinese (Simplified)"],
+    ["zh-hk", "Chinese (Traditional)"],
+    ["es", "Spanish"],
+    ["es-la", "Spanish (Latin America)"],
+    ["pt-br", "Portuguese (Brazil)"],
+    ["pt", "Portuguese"],
+    ["fr", "French"],
+    ["de", "German"],
+    ["it", "Italian"],
+    ["ru", "Russian"],
+    ["uk", "Ukrainian"],
+    ["pl", "Polish"],
+    ["tr", "Turkish"],
+    ["ar", "Arabic"],
+    ["bn", "Bengali"],
+    ["hi", "Hindi"],
+    ["id", "Indonesian"],
+    ["ms", "Malay"],
+    ["th", "Thai"],
+    ["vi", "Vietnamese"],
+    ["tl", "Filipino"],
+    ["my", "Burmese"],
+    ["fa", "Persian"],
+    ["he", "Hebrew"],
+    ["ro", "Romanian"],
+    ["hu", "Hungarian"],
+    ["cs", "Czech"],
+    ["sk", "Slovak"],
+    ["bg", "Bulgarian"],
+    ["el", "Greek"],
+    ["nl", "Dutch"],
+    ["sv", "Swedish"],
+    ["da", "Danish"],
+    ["no", "Norwegian"],
+    ["fi", "Finnish"],
+    ["sr", "Serbian"],
+    ["hr", "Croatian"]
+  ]);
+  function filter(id, title, choices, defaults = [], kind = "multiple", required = false) {
+    return { id, title, kind, options: choices, defaults, scopes: ["search", "feed"], required };
+  }
+  var staticFilters = [
+    { ...filter("sort", "Sort", options([
+      ["relevance:desc", "Best match"],
+      ["followedCount:desc", "Most followed"],
+      ["rating:desc", "Highest rated"],
+      ["latestUploadedChapter:desc", "Latest updates"],
+      ["createdAt:desc", "Recently added"],
+      ["title:asc", "Title A\u2013Z"],
+      ["title:desc", "Title Z\u2013A"],
+      ["year:desc", "Newest publication"]
+    ]), ["relevance:desc"], "single", true), scopes: ["search"] },
+    filter("language", "Chapter language", languages, ["en"], "single", true),
+    filter("status", "Publication status", options([
+      ["ongoing", "Ongoing"],
+      ["completed", "Completed"],
+      ["hiatus", "Hiatus"],
+      ["cancelled", "Cancelled"]
+    ])),
+    filter("demographic", "Demographic", options([
+      ["shounen", "Shounen"],
+      ["shoujo", "Shoujo"],
+      ["seinen", "Seinen"],
+      ["josei", "Josei"],
+      ["none", "Unspecified"]
+    ])),
+    filter("originalLanguage", "Original language", languages),
+    filter("rating", "Content rating", options([
+      ["safe", "Safe"],
+      ["suggestive", "Suggestive"],
+      ["erotica", "Erotica"],
+      ["pornographic", "Pornographic"]
+    ]), ["safe", "suggestive"], "multiple", true),
+    filter("includedTagsMode", "Match included tags", options([["AND", "All selected tags"], ["OR", "Any selected tag"]]), ["AND"], "single", true),
+    filter("excludedTagsMode", "Exclude titles matching", options([["OR", "Any excluded tag"], ["AND", "All excluded tags"]]), ["OR"], "single", true)
+  ];
+  function tagFilters(tags) {
+    return [filter("includedTags", "Include tags", tags), filter("excludedTags", "Exclude tags", tags)];
+  }
+  function searchParameters(values = {}, feedSort) {
+    if (!values || typeof values !== "object" || Array.isArray(values)) throw new Error("Invalid filters");
+    const known = /* @__PURE__ */ new Set([...staticFilters.map((filter2) => filter2.id), "includedTags", "excludedTags"]);
+    if (Object.keys(values).some((key) => !known.has(key))) throw new Error("Unknown filter");
+    const selected = {};
+    for (const definition of staticFilters) {
+      const value = values[definition.id] ?? definition.defaults;
+      if (!Array.isArray(value) || new Set(value).size !== value.length || definition.required && value.length === 0 || definition.kind === "single" && value.length > 1 || value.some((id) => !definition.options.some((option) => option.id === id))) throw new Error("Invalid filter selection");
+      selected[definition.id] = value;
+    }
+    const result = [["hasAvailableChapters", "true"]];
+    for (const [key, parameter] of [
+      ["language", "availableTranslatedLanguage[]"],
+      ["rating", "contentRating[]"],
+      ["status", "status[]"],
+      ["demographic", "publicationDemographic[]"],
+      ["originalLanguage", "originalLanguage[]"]
+    ]) {
+      for (const value of selected[key]) result.push([parameter, value]);
+    }
+    for (const key of ["includedTags", "excludedTags"]) {
+      const ids = values[key] ?? [];
+      if (!Array.isArray(ids) || ids.length > 100 || ids.some((id) => typeof id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id))) throw new Error("Invalid tag selection");
+      for (const id of ids) result.push([key + "[]", id]);
+      result.push([key + "Mode", selected[key + "Mode"][0]]);
+    }
+    const [sort, direction] = (feedSort ?? selected.sort[0]).split(":");
+    result.push([`order[${sort}]`, direction]);
+    return result;
+  }
+
   // midoku:/Users/raahat/Projects/PracticeProjects/Midoku/Extensions/sources/dev.midoku.mangadex/index.ts
   var api = "https://api.mangadex.org";
   var referer = "https://mangadex.org/";
@@ -41,7 +157,6 @@ var MidokuExtension = (() => {
   var chapterPageSize = 100;
   var maximumResults = 1e4;
   var language = "en";
-  var ratings = [["contentRating[]", "safe"], ["contentRating[]", "suggestive"]];
   var uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
   function object(value) {
     if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("Expected object");
@@ -156,15 +271,13 @@ var MidokuExtension = (() => {
       ["limit", String(limit)],
       ["offset", String(offset)],
       ["includes[]", "cover_art"],
-      ["hasAvailableChapters", "true"],
-      ["availableTranslatedLanguage[]", language],
-      ...ratings,
       ...parameters
     ]);
     const page = collection(response, offset, limit);
-    return { items: unique(page.items.map(summary)), nextCursor: page.nextCursor };
+    const preferredChapterLanguage = parameters.find(([key]) => key === "availableTranslatedLanguage[]")?.[1] ?? language;
+    return { items: unique(page.items.map((value) => ({ ...summary(value), preferredChapterLanguage }))), nextCursor: page.nextCursor };
   }
-  function chapter(value, mangaID, ordinal) {
+  function chapter(value, mangaID, ordinal, requestedLanguage) {
     const entry = entity(value, "chapter");
     const attributes = object(entry.attributes);
     const parent = relationships(entry).find((item) => item.type === "manga");
@@ -174,7 +287,7 @@ var MidokuExtension = (() => {
     }
     if (optionalText(attributes.externalUrl) !== null || attributes.isUnavailable === true || integer(attributes.pages) === 0) return null;
     const translatedLanguage = text(attributes.translatedLanguage);
-    if (translatedLanguage !== language) return null;
+    if (requestedLanguage && translatedLanguage !== requestedLanguage) return null;
     const number = optionalText(attributes.chapter);
     const volume = optionalText(attributes.volume);
     const fallback = number === null ? "Oneshot" : `Chapter ${number}`;
@@ -184,7 +297,8 @@ var MidokuExtension = (() => {
       title: volume === null ? title : `Vol. ${volume} \xB7 ${title}`,
       number,
       ordinal,
-      language: translatedLanguage
+      language: translatedLanguage,
+      groups: relationships(entry).filter((item) => item.type === "scanlation_group" && item.attributes != null).map((item) => text(object(item.attributes).name))
     };
   }
   function imageBase(value) {
@@ -198,8 +312,19 @@ var MidokuExtension = (() => {
     return base;
   }
   var index_default = defineExtension({
-    async search({ query, cursor }, host) {
-      return mangaPage(host, cursor, [["title", query.trim()], ["order[relevance]", "desc"]]);
+    async getSearchFilters(_, host) {
+      const result = await get(host, "/manga/tag");
+      if (!Array.isArray(result.data)) throw new Error("Missing tags");
+      const tags = result.data.map((value) => {
+        const tag = entity(value, "tag");
+        return { id: uuid(tag.id), title: localized([object(object(tag.attributes).name)], [language]) ?? "Tag" };
+      }).sort((a, b) => a.title.localeCompare(b.title));
+      return [...staticFilters, ...tagFilters(unique(tags))];
+    },
+    async search({ query, cursor, filters }, host) {
+      const parameters = searchParameters(filters);
+      if (query.trim()) parameters.push(["title", query.trim()]);
+      return mangaPage(host, cursor, parameters);
     },
     async getFeeds() {
       return [
@@ -208,27 +333,44 @@ var MidokuExtension = (() => {
         { id: "recent", title: "Recently added" }
       ];
     },
-    async getFeedPage({ feedID, cursor }, host) {
+    async getFeedPage({ feedID, cursor, filters }, host) {
       const sort = feedID === "latest" ? "latestUploadedChapter" : feedID === "popular" ? "followedCount" : feedID === "recent" ? "createdAt" : null;
       if (!sort) throw new Error("Unknown MangaDex feed");
-      return mangaPage(host, cursor, [[`order[${sort}]`, "desc"]]);
+      return mangaPage(host, cursor, searchParameters(filters, `${sort}:desc`));
     },
     async getMangaDetails({ mangaID }, host) {
       uuid(mangaID);
-      const response = await get(host, `/manga/${mangaID}`, [["includes[]", "cover_art"]]);
+      const response = await get(host, `/manga/${mangaID}`, [["includes[]", "cover_art"], ["includes[]", "author"], ["includes[]", "artist"]]);
       const manga = entity(response.data, "manga");
       if (manga.id !== mangaID) throw new Error("Manga ID mismatch");
       const attributes = object(manga.attributes);
-      return { ...summary(manga), description: localized([object(attributes.description)], [language]) ?? "" };
+      const names = (type) => relationships(manga).filter((item) => item.type === type && item.attributes != null).map((item) => text(object(item.attributes).name));
+      const availableLanguages = attributes.availableTranslatedLanguages == null ? [language] : attributes.availableTranslatedLanguages.filter((value) => typeof value === "string" && /^[a-z-]{2,8}$/.test(value));
+      const tags = attributes.tags == null ? [] : attributes.tags.map((value) => localized([object(object(object(value).attributes).name)], [language]) ?? "Tag");
+      return {
+        ...summary(manga),
+        description: localized([object(attributes.description)], [language]) ?? "",
+        authors: names("author"),
+        artists: names("artist"),
+        tags,
+        status: optionalText(attributes.status),
+        year: attributes.year == null ? null : String(integer(attributes.year)),
+        availableLanguages: [...new Set(availableLanguages)].map((id) => ({ id, title: languages.find((option) => option.id === id)?.title ?? id })),
+        defaultChapterLanguage: availableLanguages.includes(language) ? language : availableLanguages[0] ?? language,
+        webURL: `https://mangadex.org/title/${mangaID}`
+      };
     },
-    async getChapterPage({ mangaID, cursor }, host) {
+    async getChapterPage({ mangaID, cursor, language: selectedLanguage }, host) {
       uuid(mangaID);
+      const chapterLanguage = selectedLanguage ?? language;
+      if (!/^[a-z]{2}(-[a-z]{2,3})?$/.test(chapterLanguage)) throw new Error("Invalid chapter language");
       const offset = offsetFrom(cursor);
       const limit = Math.min(chapterPageSize, maximumResults - offset);
       const response = await get(host, `/manga/${mangaID}/feed`, [
         ["limit", String(limit)],
         ["offset", String(offset)],
-        ["translatedLanguage[]", language],
+        ["translatedLanguage[]", chapterLanguage],
+        ["includes[]", "scanlation_group"],
         ["order[volume]", "asc"],
         ["order[chapter]", "asc"],
         ["order[createdAt]", "asc"],
@@ -237,10 +379,10 @@ var MidokuExtension = (() => {
         ["includeEmptyPages", "0"],
         ["includeFutureUpdates", "0"],
         ["includeFuturePublishAt", "0"],
-        ...ratings
+        ...["safe", "suggestive", "erotica", "pornographic"].map((value) => ["contentRating[]", value])
       ]);
       const page = collection(response, offset, limit);
-      const items = page.items.map((value, index) => chapter(value, mangaID, offset + index)).filter((value) => value !== null);
+      const items = page.items.map((value, index) => chapter(value, mangaID, offset + index, chapterLanguage)).filter((value) => value !== null);
       return { items: unique(items), nextCursor: page.nextCursor };
     },
     async getChapterPages({ mangaID, chapterID }, host) {

@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const methods = {
     search: ["search"], feeds: ["getFeeds", "getFeedPage"], details: ["getMangaDetails"],
-    chapters: ["getChapterPage"], pages: ["getChapterPages"]
+    chapters: ["getChapterPage"], pages: ["getChapterPages"], filters: ["getSearchFilters"]
 };
 
 function validDomainPermission(value) {
@@ -21,7 +21,8 @@ function validDomainPermission(value) {
 }
 
 export function validateManifest(manifest) {
-    if (manifest.contractVersion !== 1 ||
+    if (![1, 2].includes(manifest.contractVersion) ||
+        (manifest.contractVersion === 1 && manifest.capabilities?.includes("filters")) ||
         !/^[a-z][a-z0-9]*(\.[a-z][a-z0-9-]*)+$/.test(manifest.id) ||
         !/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(manifest.version) ||
         typeof manifest.name !== "string" || !manifest.name.trim() || manifest.name.length > 100 ||

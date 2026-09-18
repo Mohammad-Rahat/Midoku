@@ -87,12 +87,16 @@ unchanged into that database when its migrations are established.
 
 Views use `SourceAdapter` and capability metadata; they never execute JavaScript or
 SQL. The shared HTTP coordinator must also serve future reader/thumbnail/download
-pipelines with the same connection context. The current transport is bounded GET
-metadata fetching; large-file streaming and source-specific non-GET operations need
-explicit host additions.
+pipelines with the same connection context. The current transport collects bounded GET response chunks (8 MiB metadata,
+32 MiB native images). Source covers and direct chapter reading use a 64 MiB
+connection-scoped memory cache and off-main image decoding. Pending metadata has
+priority over queued images, with the same session, spacing and verification rules.
+Large-file downloads and source-specific non-GET operations need explicit host additions.
 
 The TypeScript contract and Swift DTOs are an initial executable subset of the full
-plan. Filters, preferences/authentication schemas, parser helpers, package updating,
+plan. Contract 2 now supplies source-defined filters, richer details and chapter-language
+selection while retaining version-1 support. Preferences/authentication schemas,
+parser helpers, package updating,
 complete library persistence, mixed-source paste/reader behavior, and downloads
 remain separate implementation milestones.
 

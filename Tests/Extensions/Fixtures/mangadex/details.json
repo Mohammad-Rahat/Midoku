@@ -13,7 +13,25 @@
       "description": {
         "en": "Synthetic API fixture for Midoku."
       },
-      "originalLanguage": "ja"
+      "originalLanguage": "ja",
+      "status": "ongoing",
+      "year": 2024,
+      "availableTranslatedLanguages": [
+        "en",
+        "es"
+      ],
+      "tags": [
+        {
+          "id": "00000080-1111-4111-8111-000000000080",
+          "type": "tag",
+          "attributes": {
+            "name": {
+              "en": "Adventure"
+            },
+            "group": "genre"
+          }
+        }
+      ]
     },
     "relationships": [
       {
@@ -21,6 +39,20 @@
         "type": "cover_art",
         "attributes": {
           "fileName": "test-cover.jpg"
+        }
+      },
+      {
+        "id": "00000082-1111-4111-8111-000000000082",
+        "type": "author",
+        "attributes": {
+          "name": "Fixture Author"
+        }
+      },
+      {
+        "id": "00000083-1111-4111-8111-000000000083",
+        "type": "artist",
+        "attributes": {
+          "name": "Fixture Artist"
         }
       }
     ]

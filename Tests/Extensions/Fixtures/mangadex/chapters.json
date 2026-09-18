@@ -18,6 +18,13 @@
         {
           "id": "00000001-1111-4111-8111-000000000001",
           "type": "manga"
+        },
+        {
+          "id": "00000084-1111-4111-8111-000000000084",
+          "type": "scanlation_group",
+          "attributes": {
+            "name": "Fixture Scanlation Group"
+          }
         }
       ]
     },

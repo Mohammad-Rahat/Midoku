@@ -25,6 +25,7 @@ final class ExtensionEnvironment {
     let browserSessions = BrowserSessionStore()
     let challenges = ChallengeCoordinator()
     let requests: SourceRequestCoordinator
+    let images: SourceImageStore
     private(set) var connections: [SourceConnection] = []
     private(set) var available: [ExtensionManifest] = []
     private(set) var errorMessage: String?
@@ -38,6 +39,7 @@ final class ExtensionEnvironment {
             sessions: browserSessions,
             verification: challenges
         )
+        images = SourceImageStore(requests: requests)
         let directory = URL.applicationSupportDirectory.appending(path: "Midoku", directoryHint: .isDirectory)
         connectionStore = SourceConnectionStore(fileURL: directory.appending(path: "source-connections.json"))
     }

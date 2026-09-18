@@ -47,7 +47,7 @@ test("manifest validation rejects incompatible contracts, private hosts, and bro
     const { manifest } = await load("dev.midoku.fixture-a");
     validateManifest({ ...manifest, domains: ["*.mangadex.network"] });
     for (const patch of [
-        { contractVersion: 2 }, { version: "1.9" }, { capabilities: ["unknown"] },
+        { contractVersion: 3 }, { version: "1.9" }, { capabilities: ["unknown"] },
         { domains: ["*.com"] }, { domains: ["127.0.0.1"] },
         { domains: ["example.local"] }, { domains: ["example.com", "example.com"] },
         { domains: ["*.*.example.com"] }, { domains: ["foo*.example.com"] }, { domains: ["*.127.0.0.1"] }

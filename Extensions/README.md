@@ -5,7 +5,7 @@ page data. Write it in TypeScript, compile it to JavaScript, and register the
 reviewed bundle with the app. The app provides networking, sessions, verification,
 UI, and storage.
 
-This guide describes **contract version 1 as implemented today**. The product
+This guide describes **contract version 2 as implemented today** (the host also runs legacy version-1 bundles). The product
 plan describes a larger future SDK. If they differ, follow the current
 [TypeScript SDK](sdk/index.ts) and [Swift contract](../Midoku/Extensions/Core/ExtensionContract.swift).
 A [bundled MangaDex adapter](sources/dev.midoku.mangadex/README.md) is available for
@@ -17,6 +17,7 @@ testing. Comix remains planned; confirm its canonical domain before implementing
 - [Create and build an extension](#create-and-build-an-extension)
 - [Manifest requirements](#manifest-requirements)
 - [Methods and returned data](#methods-and-returned-data)
+- [Filters and contract-2 compatibility](#filters-and-contract-2-compatibility)
 - [Identity, ordering, and pagination](#identity-ordering-and-pagination)
 - [Complete search example](#complete-search-example)
 - [Networking and Cloudflare](#networking-and-cloudflare)
@@ -35,11 +36,11 @@ testing. Comix remains planned; confirm its canonical domain before implementing
 | Chapter order and ordered image descriptors | Native screens and source connection management |
 | Source-specific parser fixtures and tests | Library composition, user overrides, and reading progress |
 
-The current app supports registration, connection management, and source search.
-The runtime also supports feeds, details, chapters, and page descriptors, which
-can be tested through `SourceAdapter`. Complete feeds, library, reader, image
-loading, and download screens/pipelines are still product milestones. Returning
-page descriptors does not by itself make an extension usable in a finished reader.
+The app renders source-defined feed tabs, debounced search, filters, cover grids,
+pagination, entry metadata, chapter-language selection, chapter lists, and direct
+chapter reading with page navigation and zoom. Covers and pages use the shared
+source session and a bounded image cache. Personal-library composition, persistent
+reading progress, downloads, and the full planned reader remain separate milestones.
 
 An extension must not write library entries, merge chapters across sources, choose
 which source supplies a library slot, or change progress. Midoku owns those choices.
@@ -115,7 +116,7 @@ For the worked search example below, use this `manifest.json`:
   "id": "dev.publisher.source",
   "name": "Example Source",
   "version": "0.1.0",
-  "contractVersion": 1,
+  "contractVersion": 2,
   "domains": ["api.example.com", "img.example.com", "example.com"],
   "capabilities": ["search"]
 }
@@ -129,9 +130,9 @@ source hosts for a real adapter; the example is tested with a fake host offline.
 | `id` | Stable publisher-qualified ID, e.g. `dev.publisher.source`. Must match `^[a-z][a-z0-9]*(\.[a-z][a-z0-9-]*)+$`. Do not change it on updates. |
 | `name` | Nonblank display name, at most 100 characters. |
 | `version` | Numeric `major.minor.patch`, e.g. `0.1.0`. No `v` prefix, leading zeroes, prerelease suffix, or build metadata. |
-| `contractVersion` | Exactly the number `1`. |
+| `contractVersion` | Use `2` for new adapters. Legacy `1` remains supported; it cannot declare `filters`. |
 | `domains` | Up to 32 distinct lowercase host permissions: exact hostnames or explicitly reviewed `*.domain` subdomain scopes. No scheme, path, port, IP literal, or local/private-style suffix such as `.local` or `.test`. Only one leading `*.` is allowed; the remaining root must be a valid multi-label public hostname. |
-| `capabilities` | Nonempty list using only `search`, `feeds`, `details`, `chapters`, and `pages`. List each once and implement all its required methods. |
+| `capabilities` | Nonempty list using only `search`, `feeds`, `details`, `chapters`, `pages`, and `filters`. List each once and implement all its required methods. |
 
 Domain permissions do not include subdomains automatically. `example.com` does
 not permit `api.example.com`. Include every host used by metadata, redirects,
@@ -144,7 +145,7 @@ domain ownership; maintainers must review the scope before adding it.
 
 Fields proposed in the plan such as `icon`, `minimumAppVersion`, settings schemas,
 request policy, publisher keys, and authentication metadata have no supported
-contract-1 behavior. Adding fields to JSON does not enable those features.
+contract behavior. Adding fields to JSON does not enable those features.
 
 ## Methods and returned data
 
@@ -156,11 +157,12 @@ even if its method happens to exist in the bundle.
 
 | Capability | Method | Input | Return |
 | --- | --- | --- | --- |
-| `search` | `search` | `{ query: string, cursor?: string \| null }` | `Page<MangaSummary>` |
+| `search` | `search` | `{ query: string, cursor?: string \| null, filters?: FilterValues }` | `Page<MangaSummary>` |
+| `filters` | `getSearchFilters` | `{}` | `SearchFilter[]` |
 | `feeds` | `getFeeds` | `{}` | `Feed[]` |
-| `feeds` | `getFeedPage` | `{ feedID: string, cursor?: string \| null }` | `Page<MangaSummary>` |
+| `feeds` | `getFeedPage` | `{ feedID: string, cursor?: string \| null, filters?: FilterValues }` | `Page<MangaSummary>` |
 | `details` | `getMangaDetails` | `{ mangaID: string }` | `MangaDetails` |
-| `chapters` | `getChapterPage` | `{ mangaID: string, cursor?: string \| null }` | `Page<Chapter>` |
+| `chapters` | `getChapterPage` | `{ mangaID: string, cursor?: string \| null, language?: string \| null }` | `Page<Chapter>` |
 | `pages` | `getChapterPages` | `{ mangaID: string, chapterID: string }` | `PageResource[]` |
 
 `feeds` requires both feed methods. A search-only extension is valid. A source
@@ -172,8 +174,21 @@ These are the complete current return types:
 
 ```ts
 interface Page<T> { items: T[]; nextCursor: string | null }
-interface MangaSummary { id: string; title: string; coverURL: string | null }
-interface MangaDetails extends MangaSummary { description: string }
+interface MangaSummary {
+    id: string; title: string; coverURL: string | null;
+    preferredChapterLanguage?: string | null;
+}
+interface MangaDetails extends MangaSummary {
+    description: string;
+    authors?: string[];
+    artists?: string[];
+    status?: string | null;
+    year?: string | null;
+    tags?: string[];
+    availableLanguages?: FilterOption[];
+    defaultChapterLanguage?: string | null;
+    webURL?: string | null;
+}
 interface Feed { id: string; title: string }
 interface Chapter {
     id: string;
@@ -181,6 +196,7 @@ interface Chapter {
     number: string | null;
     ordinal: number;
     language: string | null;
+    groups?: string[]; // scanlation credits shown in the list and reader
 }
 interface PageResource { id: string; url: string; headers: Record<string, string> }
 ```
@@ -188,7 +204,11 @@ interface PageResource { id: string; url: string; headers: Record<string, string
 Return plain JSON-safe objects and arrays. Use explicit `null` for absent nullable
 values, `[]` for a genuinely empty collection, and `{}` for no page headers.
 Do not return `undefined`, class instances, Map, Set, BigInt, functions, cyclic
-objects, NaN, or Infinity. Extra metadata is not consumed by contract 1.
+objects, NaN, or Infinity. Contract-2 metadata fields above are optional; unknown
+fields are not displayed. Supply human-readable language labels in
+`availableLanguages`, and pass its stable option ID back to `getChapterPage`.
+`preferredChapterLanguage` carries a browse-language choice into entry opening;
+it is never part of a manga identity. `webURL` must satisfy manifest permissions.
 
 Concrete results for the methods other than search:
 
@@ -228,6 +248,60 @@ Authors must additionally validate meaningful chapter/feed titles, languages,
 ordering, and source-specific data. The current host does not enforce every one
 of these semantic rules.
 
+## Filters and contract-2 compatibility
+
+Declare `filters` and implement `getSearchFilters` to opt into the native filter
+sheet. A filter only describes controls; the adapter must translate selections
+into actual source parameters for both search and supported feeds.
+
+```ts
+type FilterValues = Record<string, string[]>;
+interface FilterOption { id: string; title: string }
+interface SearchFilter {
+    id: string;
+    title: string;
+    kind: "single" | "multiple";
+    options: FilterOption[];
+    defaults: string[];
+    scopes: ("search" | "feed")[];
+    required: boolean;
+}
+```
+
+For example, a status control can return:
+
+```json
+{
+  "id": "status", "title": "Publication status", "kind": "multiple",
+  "options": [{ "id": "ongoing", "title": "Ongoing" }, { "id": "completed", "title": "Completed" }],
+  "defaults": [], "scopes": ["search", "feed"], "required": false
+}
+```
+
+The corresponding search input is
+`{ "query": "Atlas", "cursor": null, "filters": { "status": ["completed"] } }`.
+Filter IDs and option IDs are stable opaque strings. Use at most 32 filters,
+nonempty titles/options/scopes, unique IDs, and defaults drawn from the options.
+Single selection accepts at most one value; required controls have nonempty
+defaults and cannot be applied empty. The host validates returned definitions.
+Adapters must also validate input values before building a URL.
+
+Omitted filter keys mean adapter defaults. An explicit empty array means no
+selection for an optional control, not its defaults. An empty search query must
+have documented behavior: MangaDex returns the filtered catalogue. Preserve the
+same filters on every paginated request. Sort filters normally have only the
+`search` scope: a feed keeps its own ordering. Tag definitions may be fetched via
+`host.request`; the app caches them for the open source screen. They must never
+include executable UI or credentials. Apply commits the draft, Cancel discards it,
+and Reset restores defaults when applied. Selections persist while navigating
+within that source screen; they are not persisted across app launches yet.
+
+Version 2 adds the filter capability/input, rich optional metadata, and an optional
+chapter-language input. Existing version-1 bundles continue to work with missing
+optional data and no filter UI. Update `contractVersion` to `2` before adopting
+these features and bump the adapter release version. No connection, manga, or
+chapter IDs change during this update.
+
 ## Identity, ordering, and pagination
 
 There are three distinct identities:
@@ -258,8 +332,10 @@ contents before using them in a request; do not let a cursor choose arbitrary ho
 
 Do not return the same continuation token indefinitely or crawl the entire source
 inside one method. Avoid duplicate items across pages when the API permits it.
-The current bridge validates each returned page; it does not implement a universal
-pagination loop or automatically detect repeated cursors across calls.
+The bridge validates each returned page. Native browse/chapter pagination drops
+duplicate IDs across moving pages and rejects repeated continuation tokens. Empty
+filtered pages may still carry a next cursor. A changed query/filter/feed/language
+starts a new sequence; late responses from the previous sequence are discarded.
 
 ## Complete search example
 
@@ -395,9 +471,13 @@ works based only on finding a clearance cookie. A browser-based fallback transpo
 is an architectural option, not an existing host method.
 
 Return page URLs and allowed headers from `getChapterPages`; do not download or
-base64-encode images through the text bridge. Future reader/cover/download code
-must keep the original connection context and route requests through the host.
-That pipeline is not complete yet. Before a protected source ships, test both
+base64-encode images through the text bridge. The native cover/direct-reader
+pipeline retains the connection context and routes images through the same host.
+Its memory cache is scoped by connection, URL, headers and decode size (64 MiB
+budget); images are downsampled off the main actor. Metadata is limited to 8 MiB
+and native image responses to 32 MiB, collected in bounded URLSession chunks.
+Queued metadata takes priority over queued cover/page requests; request spacing
+and verification rules apply to both. Permanent downloads are not implemented. Before a protected source ships, test both
 metadata and images through the same session on a physical device, including
 expired sessions, cancellation, repeated challenges, relaunch, network changes,
 and isolation between two connections.
@@ -428,7 +508,7 @@ and tests have Node APIs; production adapter code does not.
 | `host.request` calls | 32 per method invocation |
 | Active request flow | One per connection, with at least 500 ms spacing between native request starts |
 | Redirects | Five per request flow |
-| HTTP response body | 8 MiB |
+| HTTP response body | 8 MiB metadata / 32 MiB native images |
 | Encoded host response delivered to JS | 12 MiB |
 | Normalized JSON | 4 MiB, with the escaped result envelope also limited to 4 MiB |
 | Individual JSON string | 256 KiB UTF-8 |

@@ -45,20 +45,46 @@ nonisolated private struct JavaScriptSourceAdapter: SourceAdapter {
     let runtime: any ExtensionRuntime
     let host: any ExtensionHost
 
-    func search(query: String, cursor: String?) async throws -> SourcePage<MangaSummary> {
-        let page: SourcePage<MangaSummary> = try await call("search", capability: .search, input: ["query": query, "cursor": cursor])
+    func search(query: String, cursor: String?, filters: SourceFilterValues) async throws -> SourcePage<MangaSummary> {
+        let page: SourcePage<MangaSummary> = try await call("search", capability: .search, input: BrowseInput(query: query, cursor: cursor, filters: filters))
         try validateManga(page.items)
         return page
     }
 
+    private struct BrowseInput: Encodable, Sendable {
+        var query: String? = nil
+        var feedID: String? = nil
+        var cursor: String? = nil
+        var filters: SourceFilterValues = [:]
+    }
+
+    func searchFilters() async throws -> [SourceSearchFilter] {
+        guard manifest.capabilities.contains(.filters) else { return [] }
+        let filters: [SourceSearchFilter] = try await call("getSearchFilters", capability: .filters, input: [String: String]())
+        try validateIDs(filters.map(\.id))
+        guard filters.count <= 32 else { throw ExtensionFailure.responseTooLarge }
+        for filter in filters {
+            try validateIDs(filter.options.map(\.id))
+            let options = Set(filter.options.map(\.id))
+            guard !filter.title.isEmpty, !filter.options.isEmpty,
+                  !filter.scopes.isEmpty, Set(filter.defaults).count == filter.defaults.count,
+                  Set(filter.defaults).isSubset(of: options),
+                  !filter.required || !filter.defaults.isEmpty,
+                  filter.kind != .single || filter.defaults.count <= 1 else {
+                throw ExtensionFailure.invalidResponse("Invalid search filter.")
+            }
+        }
+        return filters
+    }
+
     func feeds() async throws -> [FeedDescriptor] {
-        let result: [FeedDescriptor] = try await call("getFeeds", capability: .feeds, input: [:])
+        let result: [FeedDescriptor] = try await call("getFeeds", capability: .feeds, input: [String: String]())
         try validateIDs(result.map(\.id))
         return result
     }
 
-    func feed(id: String, cursor: String?) async throws -> SourcePage<MangaSummary> {
-        let page: SourcePage<MangaSummary> = try await call("getFeedPage", capability: .feeds, input: ["feedID": id, "cursor": cursor])
+    func feed(id: String, cursor: String?, filters: SourceFilterValues) async throws -> SourcePage<MangaSummary> {
+        let page: SourcePage<MangaSummary> = try await call("getFeedPage", capability: .feeds, input: BrowseInput(feedID: id, cursor: cursor, filters: filters))
         try validateManga(page.items)
         return page
     }
@@ -70,11 +96,13 @@ nonisolated private struct JavaScriptSourceAdapter: SourceAdapter {
             throw ExtensionFailure.invalidResponse("Invalid manga details.")
         }
         if let coverURL = detail.coverURL { try SourceRequestPolicy(domains: manifest.domains).validate(coverURL) }
+        if let languages = detail.availableLanguages { try validateIDs(languages.map(\.id)) }
+        if let webURL = detail.webURL { try SourceRequestPolicy(domains: manifest.domains).validate(webURL) }
         return detail
     }
 
-    func chapters(mangaID: String, cursor: String?) async throws -> SourcePage<ChapterRecord> {
-        let page: SourcePage<ChapterRecord> = try await call("getChapterPage", capability: .chapters, input: ["mangaID": mangaID, "cursor": cursor])
+    func chapters(mangaID: String, cursor: String?, language: String?) async throws -> SourcePage<ChapterRecord> {
+        let page: SourcePage<ChapterRecord> = try await call("getChapterPage", capability: .chapters, input: ["mangaID": mangaID, "cursor": cursor, "language": language])
         try validateIDs(page.items.map(\.id))
         return page
     }
@@ -90,8 +118,8 @@ nonisolated private struct JavaScriptSourceAdapter: SourceAdapter {
         return pages
     }
 
-    private func call<Result: Decodable & Sendable>(
-        _ method: String, capability: SourceCapability, input: [String: String?]
+    private func call<Result: Decodable & Sendable, Input: Encodable & Sendable>(
+        _ method: String, capability: SourceCapability, input: Input
     ) async throws -> Result {
         guard manifest.capabilities.contains(capability) else {
             throw ExtensionFailure.unsupportedMethod(method)

@@ -1,6 +1,6 @@
 # MangaDex for Midoku
 
-Bundled testing adapter: `dev.midoku.mangadex`, release `0.1.0`, contract 1.
+Bundled testing adapter: `dev.midoku.mangadex`, release `0.2.0`, contract 2.
 Implemented in TypeScript against Midoku's SDK; it does not load Aidoku binaries.
 
 ## Try it
@@ -8,9 +8,19 @@ Implemented in TypeScript against Midoku's SDK; it does not load Aidoku binaries
 Open/build Midoku in Xcode, then go to **Settings → Extensions → MangaDex → Add**.
 Open **Browse → MangaDex** and enter a title, such as `Yotsuba`.
 The app saves the connection and keeps its session isolated from other connections.
-The current Browse screen displays the first page of search titles. Reader,
-metadata-detail, feed, and load-more UI are separate app milestones; all six adapter
-methods are available through `SourceAdapter` and covered by tests.
+Browse opens Latest updates, with Popular, Recently added, and Search alongside it.
+The visible search field searches after a short typing pause; Return submits
+immediately. Tap Filters to change a draft, then Apply; Cancel discards changes
+and Reset restores the defaults when applied. Search and feed results have Load
+more, tappable covers, and entry navigation. Feed tabs retain their own ordering.
+
+An entry shows its description, author/artist, status, year, tags, source link,
+chapter-language selector, scanlation credits, and paginated chapter list. A
+chapter opens real pages with Previous/Next, a page picker, pinch zoom and visible
+zoom controls. Returning preserves the query, results, chapter language and scroll.
+Direct source reading currently does not save reading progress or create personal
+library entries. Downloads, library composition and the full planned reader modes
+remain separate app milestones.
 
 MangaDex is included in `Extensions/bundled.json`. Run `npm run build` inside
 `Extensions/` after modifying the source/manifest; this regenerates
@@ -22,20 +32,26 @@ and `dist/` remain ignored.
 
 | Operation | Implementation |
 | --- | --- |
-| Search | Public `/manga` endpoint; encoded title, English chapter availability, cover relationships, 20 results per API page |
+| Search | Public `/manga` endpoint; encoded title, selected chapter language/filters, covers, 20 results per page; blank title browses the filtered catalogue |
 | Feeds | Latest updates, popular, recently added using supported manga ordering parameters |
-| Details | `/manga/{id}`; title, description, cover; stable MangaDex UUID |
-| Chapters | `/manga/{id}/feed`; 100 records per page; volume/chapter ascending, creation time tie-breaker |
+| Filters | Sort, chapter language, publication status, demographic, original language, content rating, included/excluded tags with all/any matching; tags from `/manga/tag` |
+| Details | `/manga/{id}`; title, description, cover, author/artist, status/year, tags, labelled available languages and source URL; stable MangaDex UUID |
+| Chapters | `/manga/{id}/feed`; selected language, scanlation group names, 100 records per page; volume/chapter ascending, creation time tie-breaker |
 | Page descriptors | Verify chapter parent via `/chapter/{id}`, then `/at-home/server/{id}?forcePort443=true`; original-quality images in API order |
+
+Latest updates follows MangaDex's manga-level upload ordering; the language filter
+requires available chapters in that language.
 
 Defaults are English chapter translations, English-preferred titles/descriptions
 with deterministic language fallbacks, and `safe`/`suggestive` content ratings.
-There is no settings UI, MangaDex login/library sync, alternate-cover picker, or
-data-saver preference yet. Do not advertise these as implemented capabilities.
+Filters can change language and ratings; the selected browse language carries
+into entry opening. Changes survive navigation inside the source, but are not
+saved across app launches. There is no MangaDex login/library sync, alternate-cover
+picker, or data-saver preference yet.
 
 Chapter numbers remain strings, including fractional numbers; separate releases
 keep distinct chapter UUIDs even if their numbers match. External-link, unavailable,
-empty, and non-English chapters are excluded. Filtering does not reset pagination
+empty, and chapters outside the selected language are excluded. Filtering does not reset pagination
 or ordinals. Ordinals reflect positions in the source feed, not persistent IDs;
 new source uploads can change them. Collection pagination stops at MangaDex's
 10,000-result window, so very large feeds may require future date-window support.
@@ -44,9 +60,11 @@ than using the URL as its identity.
 
 ## Networking and permissions
 
-All production requests use `host.request`, including JSON requests that resolve
-images. Page methods return descriptors; the unfinished reader/download pipelines
-must use the same native connection when loading them.
+Adapter JSON requests use `host.request`. Cover and reader image bytes use the
+same native coordinator and connection session. The transport receives bounded
+chunks, prioritizes queued metadata over queued images, and uses a 64 MiB memory
+image cache keyed by connection/URL/headers/decode size. Metadata and image body
+limits are 8 MiB and 32 MiB respectively. There is no disk cache/download store yet.
 
 The manifest grants exact access to `api.mangadex.org`, `mangadex.org`, and
 `uploads.mangadex.org`, plus reviewed subdomains of `mangadex.network` for the
@@ -79,7 +97,7 @@ npm run test:live:mangadex -- "Yotsuba"
 ```
 
 The live check stops on errors/challenges, bounds the request count, observes
-request spacing, checks all six methods, and downloads one page image only into
+request spacing, checks all seven methods, and downloads one page image only into
 memory. It logs counts/title, not cookies, CDN tokens, or page URLs. It uses a Node
 test host; simulator/device verification is still required for native sessions.
 Do not repeatedly rerun it against a rate-limited or blocked source.
@@ -92,7 +110,7 @@ The Node parser tests are in `Extensions/tests/mangadex.test.mjs`.
 
 ## References and provenance
 
-Checked on 2026-09-18:
+API schema rechecked on 2026-09-19 (5.13.1); original Aidoku reference checked 2026-09-18:
 
 - [Official API documentation](https://api.mangadex.org/docs/),
   [OpenAPI schema](https://api.mangadex.org/docs/static/api.yaml), and

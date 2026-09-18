@@ -1,10 +1,10 @@
-export type Capability = "search" | "feeds" | "details" | "chapters" | "pages";
+export type Capability = "search" | "feeds" | "details" | "chapters" | "pages" | "filters";
 
 export interface Manifest {
     id: string;
     name: string;
     version: string;
-    contractVersion: 1;
+    contractVersion: 1 | 2;
     domains: string[];
     capabilities: Capability[];
 }
@@ -28,25 +28,54 @@ export interface Host {
 }
 
 export interface Page<T> { items: T[]; nextCursor: string | null }
-export interface MangaSummary { id: string; title: string; coverURL: string | null }
-export interface MangaDetails extends MangaSummary { description: string }
+export interface MangaSummary {
+    id: string;
+    title: string;
+    coverURL: string | null;
+    preferredChapterLanguage?: string | null;
+}
+export interface MangaDetails extends MangaSummary {
+    description: string;
+    authors?: string[];
+    artists?: string[];
+    status?: string | null;
+    year?: string | null;
+    tags?: string[];
+    availableLanguages?: FilterOption[];
+    defaultChapterLanguage?: string | null;
+    webURL?: string | null;
+}
 export interface Chapter {
     id: string;
     title: string;
     number: string | null;
     ordinal: number;
     language: string | null;
+    groups?: string[];
 }
 export interface PageResource { id: string; url: string; headers: Record<string, string> }
 export interface Feed { id: string; title: string }
 export interface CursorInput { cursor?: string | null }
+export type FilterValues = Record<string, string[]>;
+export interface FilterOption { id: string; title: string }
+export interface SearchFilter {
+    id: string;
+    title: string;
+    kind: "single" | "multiple";
+    options: FilterOption[];
+    defaults: string[];
+    /** Feed ordering belongs to the selected feed. */
+    scopes: ("search" | "feed")[];
+    required: boolean;
+}
 
 export interface Extension {
-    search?(input: CursorInput & { query: string }, host: Host): Promise<Page<MangaSummary>>;
+    getSearchFilters?(input: Record<string, never>, host: Host): Promise<SearchFilter[]>;
+    search?(input: CursorInput & { query: string; filters?: FilterValues }, host: Host): Promise<Page<MangaSummary>>;
     getFeeds?(input: Record<string, never>, host: Host): Promise<Feed[]>;
-    getFeedPage?(input: CursorInput & { feedID: string }, host: Host): Promise<Page<MangaSummary>>;
+    getFeedPage?(input: CursorInput & { feedID: string; filters?: FilterValues }, host: Host): Promise<Page<MangaSummary>>;
     getMangaDetails?(input: { mangaID: string }, host: Host): Promise<MangaDetails>;
-    getChapterPage?(input: CursorInput & { mangaID: string }, host: Host): Promise<Page<Chapter>>;
+    getChapterPage?(input: CursorInput & { mangaID: string; language?: string | null }, host: Host): Promise<Page<Chapter>>;
     getChapterPages?(input: { mangaID: string; chapterID: string }, host: Host): Promise<PageResource[]>;
 }
 
