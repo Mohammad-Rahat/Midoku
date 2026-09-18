@@ -1,0 +1,8 @@
+{
+  "id": "dev.midoku.fixture-b",
+  "name": "Fixture B",
+  "version": "1.0.0",
+  "contractVersion": 1,
+  "domains": [],
+  "capabilities": ["search", "feeds", "details", "chapters"]
+}

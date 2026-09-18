@@ -1,0 +1,41 @@
+{
+  "colors": {
+    "bg": "#FAFAF7",
+    "surface": "#FFFFFF",
+    "ink": "#202D26",
+    "muted": "#606D63",
+    "line": "#E7EAE4",
+    "green": "#376A50",
+    "pale": "#E9F0E9",
+    "soft": "#F0F2ED",
+    "orange": "#B66B3E"
+  },
+  "canvas": {
+    "width": 393,
+    "height": 852
+  },
+  "spacing": [
+    4,
+    8,
+    12,
+    16,
+    24,
+    32
+  ],
+  "radii": {
+    "input": 12,
+    "card": 16,
+    "button": 14,
+    "pill": 999
+  },
+  "typography": {
+    "design": "Arial",
+    "iosImplementation": "SF Pro / system font",
+    "largeTitle": 32,
+    "title": 28,
+    "section": 19,
+    "body": 14,
+    "caption": 12
+  },
+  "touchTargetMin": 44
+}

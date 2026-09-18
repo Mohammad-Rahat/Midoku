@@ -1,0 +1,23 @@
+# Midoku development instructions
+
+- Read `Midoku/plan.md`, `docs/extension-architecture.md`, and `docs/progress.md` before implementation. Explicit user instructions take precedence.
+- Keep Midoku native, local-first, and independent of specific content sources.
+- MangaDex and Comix are the first planned live adapters. Do not implement either until requested. Verify Comix's exact domain then; do not guess it.
+- New sources implement the versioned TypeScript contract in `Extensions/sdk/`. Views never branch on source names or parse source responses.
+- Source adapters return normalized data. They never mutate library entries, reading order, progress, or user overrides.
+- Source connection UUIDs and external content IDs are persistent identities. Versions, URLs, titles, and chapter numbers are not identities.
+- Preserve the plan's mixed-source composition, explicit overrides, exclusions, and separate physical progress semantics.
+- Route all source HTTP and image requests through the shared coordinator. Never use shared cookie storage or global credentials.
+- Cloudflare support belongs to the host: detect challenges, present interactive verification, reuse only that connection's session, and retry once.
+- Do not claim universal Cloudflare clearance, automatic CAPTCHA solving, Safari cookie transfer, or successful live verification without device evidence.
+- Only reviewed bundled adapter code is executable today. Remote packages require authenticated signatures, compatibility checks, staging/rollback, and a distribution decision first.
+- JavaScriptCore actor isolation is not a hostile-code sandbox and does not interrupt infinite synchronous JavaScript.
+- Keep fixture adapters behind the DEBUG development tools; never seed them into the user's normal catalogue.
+- Use Swift structured concurrency and Observation. Avoid Combine, forced unwraps, secret logging, and source-specific UI.
+- Use semantic styles, Dynamic Type, and accessible alternatives to gestures.
+- UI layouts: `docs/design/manga-reader-design-kit/`. Approved branding/colors: `docs/design/Midoku/BRAND-GUIDE.md`. Use `Midoku/Resources/MidokuAssets.xcassets` and `Midoku/DesignSystem/`; keep prototype sample data and reference screens out of app resources.
+- Use Xcode tools for app files/builds. This project uses Xcode 27's `project.xcproj` format, not `project.pbxproj`.
+- Preserve existing signing and bundle settings. Record deployment changes explicitly.
+- Use Swift Testing for domain/integration tests, XCUIAutomation for UI tests, and Node's test runner for adapter tooling.
+- Verify relevant changes with `swift test`, `npm ci && npm test` inside `Extensions`, and Xcode BuildProject. Report any unrun checks.
+- Keep this file concise. Record implementation decisions and remaining work in `docs/`.
