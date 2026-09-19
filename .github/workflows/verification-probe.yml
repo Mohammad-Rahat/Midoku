@@ -1,0 +1,25 @@
+name: WebKit verification diagnosis
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['Tools/verification-probe.swift', '.github/workflows/verification-probe.yml']
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: xcode-27
+    timeout-minutes: 5
+    env:
+      DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Observe actual WebKit frames and source verification
+        run: |
+          cat Midoku/Extensions/Core/ExtensionContract.swift \
+              Midoku/Extensions/Core/SourceRequestPolicy.swift \
+              Midoku/Extensions/Core/SourceVerificationPolicy.swift \
+              Tools/verification-probe.swift > "$RUNNER_TEMP/verification-probe.swift"
+          swift "$RUNNER_TEMP/verification-probe.swift"
