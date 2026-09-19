@@ -50,11 +50,11 @@ private struct VerificationBrowser: UIViewRepresentable {
     let onError: (String) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(challenge: challenge, onVerified: onVerified, onError: onError)
+        Coordinator(challenge: challenge, sessions: sessions, onVerified: onVerified, onError: onError)
     }
 
     func makeUIView(context: Context) -> WKWebView {
-        let webView = sessions.makeWebView(for: challenge.connection.id)
+        let webView = sessions.makeVerificationWebView(for: challenge.connection.id)
         webView.navigationDelegate = context.coordinator
         context.coordinator.start(in: webView)
         return webView
@@ -81,14 +81,21 @@ private struct VerificationBrowser: UIViewRepresentable {
         """
 
         let challenge: SourceChallenge
+        let sessions: BrowserSessionStore
         let onVerified: () -> Void
         let onError: (String) -> Void
         private var previousClearanceValue: String?
         private var monitorTask: Task<Void, Never>?
         private var didComplete = false
 
-        init(challenge: SourceChallenge, onVerified: @escaping () -> Void, onError: @escaping (String) -> Void) {
+        init(
+            challenge: SourceChallenge,
+            sessions: BrowserSessionStore,
+            onVerified: @escaping () -> Void,
+            onError: @escaping (String) -> Void
+        ) {
             self.challenge = challenge
+            self.sessions = sessions
             self.onVerified = onVerified
             self.onError = onError
         }
@@ -97,6 +104,7 @@ private struct VerificationBrowser: UIViewRepresentable {
             monitorTask?.cancel()
             monitorTask = Task { [weak self, weak webView] in
                 guard let self, let webView else { return }
+                await sessions.prepareVerification(for: challenge.url, connectionID: challenge.connection.id)
                 let cookieStore = webView.configuration.websiteDataStore.httpCookieStore
                 let existing = await cookieStore.allCookies()
                 previousClearanceValue = existing.first {
@@ -139,6 +147,7 @@ private struct VerificationBrowser: UIViewRepresentable {
             ) else { return }
             let result = try? await webView.evaluateJavaScript(Self.challengePageScript)
             guard result as? Bool == false else { return }
+            await sessions.importVerificationCookies(for: challenge.url, connectionID: challenge.connection.id)
             didComplete = true
             monitorTask?.cancel()
             onVerified()
@@ -146,9 +155,10 @@ private struct VerificationBrowser: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
             guard let url = navigationAction.request.url else { return .cancel }
+            // Cloudflare creates blank documents before attaching its challenge runtime.
+            if url.absoluteString == "about:blank" { return .allow }
             // Cloudflare embeds verification frames. They do not expand the adapter's HTTP permissions.
-            if navigationAction.targetFrame?.isMainFrame == false,
-               url.scheme == "https", url.host == "challenges.cloudflare.com" {
+            if url.scheme == "https", url.host == "challenges.cloudflare.com" {
                 return .allow
             }
             if navigationAction.targetFrame == nil {
