@@ -10,6 +10,9 @@ final class VerificationProbe: NSObject, WKNavigationDelegate {
     var trace: [[String: Any]] = []
     var blocked = 0
     var lastStatus: Int?
+    var mainLoads = 0
+    var lastServerIsCloudflare = false
+    var lastProxyRefusal = false
     var allowFixtureBootstrap = false
 
     init(host: String, enforcePolicy: Bool) {
@@ -46,7 +49,12 @@ final class VerificationProbe: NSObject, WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse) async -> WKNavigationResponsePolicy {
-        if response.isForMainFrame, let http = response.response as? HTTPURLResponse { lastStatus = http.statusCode }
+        if response.isForMainFrame, let http = response.response as? HTTPURLResponse {
+            lastStatus = http.statusCode
+            mainLoads += 1
+            lastServerIsCloudflare = http.value(forHTTPHeaderField: "server")?.lowercased() == "cloudflare"
+            lastProxyRefusal = http.value(forHTTPHeaderField: "x-mitmproxy-blocked-reason") != nil
+        }
         return .allow
     }
 }
@@ -113,27 +121,52 @@ Task { @MainActor in
         web.navigationDelegate = nil
     }
 
-    // Inspect the homepage flow, then one adapter search through the production host.
-    guard let url = URL(string: "https://novelcrow.com/") else { exit(1) }
-    for enforce in [true, false] {
+    // Use the same feed URL as the app, with controlled request/profile comparisons.
+    guard let url = URL(string: "https://novelcrow.com/?s=&post_type=wp-manga&m_orderby=trending") else { exit(1) }
+    for mode in ["profile-original-request", "profile-default-request", "ephemeral-default-request"] {
         let sessions = BrowserSessionStore()
         let connection = SourceConnection(extensionID: "dev.midoku.novelcrow", name: "NovelCrow probe")
-        do { _ = try await sessions.headers(for: url, connectionID: connection.id) }
+        var initialHeaders: [String: String] = [:]
+        do { initialHeaders = try await sessions.headers(for: url, connectionID: connection.id) }
         catch { report(["phase": "live-macos", "error": "Could not initialize browser identity"]); exit(1) }
-        let web = sessions.makeWebView(for: connection.id)
+        let web: WKWebView
+        if mode == "ephemeral-default-request" {
+            let config = WKWebViewConfiguration()
+            config.websiteDataStore = .nonPersistent()
+            web = WKWebView(frame: .zero, configuration: config)
+        } else {
+            web = sessions.makeWebView(for: connection.id)
+        }
         web.frame = window.contentView?.bounds ?? .zero
-        let delegate = VerificationProbe(host: "novelcrow.com", enforcePolicy: enforce)
+        let delegate = VerificationProbe(host: "novelcrow.com", enforcePolicy: true)
         web.navigationDelegate = delegate
         window.contentView = web
-        web.load(URLRequest(url: url))
+        var browserRequest = URLRequest(url: url)
+        if mode == "profile-original-request" {
+            initialHeaders["Accept"] = "text/html"
+            initialHeaders["Referer"] = "https://novelcrow.com/"
+            let challenge = SourceChallenge(connection: connection, url: url, policy: delegate.policy, headers: initialHeaders)
+            do { browserRequest = try SourceVerificationPolicy.request(for: challenge) }
+            catch { report(["phase": "live-macos", "error": "Could not prepare original request"]); exit(1) }
+        }
+        web.load(browserRequest)
         try? await Task.sleep(for: .seconds(20))
         let cookies = await web.configuration.websiteDataStore.httpCookieStore.allCookies()
         let hasClearance = cookies.contains { $0.name == "cf_clearance" }
         let rawState = (try? await web.evaluateJavaScript(SourceVerificationPolicy.pageStateScript)) as? String
         let state = rawState.flatMap { ["loading", "challenge", "ready"].contains($0) ? $0 : nil } ?? "unavailable"
-        report(["phase": "live-macos", "enforced": enforce, "status": delegate.lastStatus ?? 0, "page": state,
-                "hasClearance": hasClearance, "blockedByPolicy": delegate.blocked, "trace": delegate.trace])
-        if enforce {
+        let flags = (try? await web.evaluateJavaScript("""
+            ({stage: !!document.querySelector('#challenge-stage'),
+              widget: !!document.querySelector('input[name="cf-turnstile-response"]'),
+              moment: document.title.toLowerCase() === 'just a moment...',
+              blocked: /access denied|sorry.*blocked/i.test(document.title),
+              catalogue: !!document.querySelector('.page-item-detail, .c-tabs-item__content')})
+            """)) as? [String: Bool] ?? [:]
+        report(["phase": "live-macos", "mode": mode, "status": delegate.lastStatus ?? 0, "page": state,
+                "hasClearance": hasClearance, "blockedByPolicy": delegate.blocked,
+                "mainLoads": delegate.mainLoads, "serverIsCloudflare": delegate.lastServerIsCloudflare,
+                "proxyRefusal": delegate.lastProxyRefusal, "flags": flags, "trace": delegate.trace])
+        if mode != "ephemeral-default-request" {
             do {
                 var request = URLRequest(url: url)
                 request.cachePolicy = .reloadIgnoringLocalCacheData
@@ -142,7 +175,10 @@ Task { @MainActor in
                 }
                 let transport = URLSessionSourceTransport()
                 let response = try await transport.send(request, maximumBytes: 8 * 1024 * 1024)
-                report(["phase": "native-retry", "status": response.status, "challenge": response.isChallenge])
+                report(["phase": "native-retry", "mode": mode, "status": response.status, "challenge": response.isChallenge,
+                        "sentClearance": request.value(forHTTPHeaderField: "Cookie")?.contains("cf_clearance=") == true,
+                        "serverIsCloudflare": response.header("server")?.lowercased() == "cloudflare",
+                        "proxyRefusal": response.header("x-mitmproxy-blocked-reason") != nil])
                 let manifest = try JSONDecoder().decode(ExtensionManifest.self, from: Data(contentsOf:
                     URL(fileURLWithPath: "Extensions/sources/dev.midoku.novelcrow/manifest.json")))
                 let bundle = try String(contentsOf: URL(fileURLWithPath: "Extensions/dist/dev.midoku.novelcrow/bundle.js"), encoding: .utf8)
@@ -154,10 +190,10 @@ Task { @MainActor in
                 let output = try await runtime.invoke(bundle: bundle, method: "search",
                     input: Data(#"{"query":"One Piece","cursor":null,"filters":{}}"#.utf8), host: host)
                 let page = try JSONDecoder().decode(SourcePage<MangaSummary>.self, from: output)
-                report(["phase": "live-extension-search", "succeeded": true, "itemCount": page.items.count])
+                report(["phase": "live-extension-search", "mode": mode, "succeeded": true, "itemCount": page.items.count])
             } catch let error as ExtensionFailure {
                 // Host errors have fixed redacted descriptions. Do not log arbitrary errors or URLs.
-                report(["phase": "live-extension-search", "succeeded": false, "error": error.localizedDescription])
+                report(["phase": "live-extension-search", "mode": mode, "succeeded": false, "error": error.localizedDescription])
             } catch {
                 report(["phase": "live-extension-search", "succeeded": false, "error": "Probe could not complete"])
             }
