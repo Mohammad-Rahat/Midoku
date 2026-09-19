@@ -47,7 +47,7 @@ nonisolated struct SourceRequestPolicy: Sendable {
         for (name, value) in headers {
             let key = name.lowercased()
             guard allowed.contains(key), seen.insert(key).inserted,
-                  value.utf8.count <= 2048, !value.contains("\r"), !value.contains("\n") else {
+                  value.utf8.count <= 2048, !value.utf8.contains(13), !value.utf8.contains(10) else {
                 throw ExtensionFailure.requestNotAllowed
             }
             if key == "referer" {
@@ -127,5 +127,4 @@ nonisolated struct UnavailableChallengeResolver: ChallengeResolving {
         throw ExtensionFailure.verificationRequired
     }
 }
-
 

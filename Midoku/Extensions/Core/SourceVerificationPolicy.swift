@@ -16,7 +16,7 @@ nonisolated enum SourceVerificationPolicy {
         for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
         if let userAgent = challenge.headers.first(where: { $0.key.lowercased() == "user-agent" })?.value {
             guard !userAgent.isEmpty, userAgent.utf8.count <= 4096,
-                  !userAgent.contains("\r"), !userAgent.contains("\n") else {
+                  !userAgent.utf8.contains(13), !userAgent.utf8.contains(10) else {
                 throw ExtensionFailure.requestNotAllowed
             }
             request.setValue(userAgent, forHTTPHeaderField: "User-Agent")

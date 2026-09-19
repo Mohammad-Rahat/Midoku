@@ -68,7 +68,11 @@ struct SourceVerificationTests {
     @Test func invalidBrowserRequestCannotSmuggleHeadersOrNavigateElsewhere() throws {
         let connection = SourceConnection(extensionID: "dev.midoku.tests", name: "Test")
         let url = try #require(URL(string: "https://example.com/"))
-        for headers in [["User-Agent": "browser\r\nCookie: value"], ["Referer": "https://evil.org/"]] {
+        for headers in [
+            ["User-Agent": "browser\r\nCookie: value"], ["User-Agent": "browser\rCookie: value"],
+            ["User-Agent": "browser\nCookie: value"], ["Accept": "text/html\r\nCookie: value"],
+            ["Accept-Language": "en\nCookie: value"], ["Referer": "https://evil.org/"]
+        ] {
             #expect(throws: ExtensionFailure.requestNotAllowed) {
                 try SourceVerificationPolicy.request(for: SourceChallenge(
                     connection: connection, url: url, policy: policy, headers: headers
@@ -148,7 +152,7 @@ struct SourceVerificationTests {
             ("loading", "", false, "loading"), ("complete", "Just a moment...", false, "challenge"),
             ("complete", "Website", true, "challenge"), ("complete", "Website", false, "ready")
         ] {
-            context.evaluateScript("var document = { readyState: '\(readyState)', title: '\(title)', querySelector: () => \(hasWidget ? "{}" : "null") };")
+            context.evaluateScript("var document = { readyState: '\(readyState)', title: '\(title)', querySelector: () => (\(hasWidget ? "{}" : "null")) };")
             #expect(context.evaluateScript(SourceVerificationPolicy.pageStateScript)?.toString() == expected)
             #expect(context.exception == nil)
         }
