@@ -84,17 +84,23 @@ struct SourceVerificationTests {
     @Test func completionRequiresFinishedSuccessfulPageAndFreshClearance() {
         var state = SourceVerificationProgress()
         state.navigationStarted()
-        #expect(!state.complete(revision: state.revision, hasFreshClearance: true, pageState: "ready"))
+        let unfinished = state.complete(revision: state.revision, hasFreshClearance: true, pageState: "ready")
+        #expect(!unfinished)
         state.received(statusCode: 403)
         state.navigationFinished()
-        #expect(!state.complete(revision: state.revision, hasFreshClearance: true, pageState: "ready"))
+        let forbidden = state.complete(revision: state.revision, hasFreshClearance: true, pageState: "ready")
+        #expect(!forbidden)
         state.received(statusCode: 200)
         for page in [nil, "loading", "challenge", "unavailable"] as [String?] {
-            #expect(!state.complete(revision: state.revision, hasFreshClearance: true, pageState: page))
+            let incompletePage = state.complete(revision: state.revision, hasFreshClearance: true, pageState: page)
+            #expect(!incompletePage)
         }
-        #expect(!state.complete(revision: state.revision, hasFreshClearance: false, pageState: "ready"))
-        #expect(state.complete(revision: state.revision, hasFreshClearance: true, pageState: "ready"))
-        #expect(!state.complete(revision: state.revision, hasFreshClearance: true, pageState: "ready"))
+        let staleClearance = state.complete(revision: state.revision, hasFreshClearance: false, pageState: "ready")
+        #expect(!staleClearance)
+        let completed = state.complete(revision: state.revision, hasFreshClearance: true, pageState: "ready")
+        #expect(completed)
+        let duplicate = state.complete(revision: state.revision, hasFreshClearance: true, pageState: "ready")
+        #expect(!duplicate)
     }
 
     @Test func delayedCallbacksCannotFinishNewNavigationCancelledOrTimedOutAttempt() {
@@ -106,12 +112,15 @@ struct SourceVerificationTests {
         state.navigationStarted()
         state.received(statusCode: 200)
         state.navigationFinished()
-        #expect(!state.complete(revision: oldRevision, hasFreshClearance: true, pageState: "ready"))
+        let obsoleteNavigation = state.complete(revision: oldRevision, hasFreshClearance: true, pageState: "ready")
+        #expect(!obsoleteNavigation)
         let currentRevision = state.revision
         state.stop()
-        #expect(!state.complete(revision: currentRevision, hasFreshClearance: true, pageState: "ready"))
+        let stopped = state.complete(revision: currentRevision, hasFreshClearance: true, pageState: "ready")
+        #expect(!stopped)
         state.navigationFinished()
-        #expect(!state.complete(revision: state.revision, hasFreshClearance: true, pageState: "ready"))
+        let lateCallback = state.complete(revision: state.revision, hasFreshClearance: true, pageState: "ready")
+        #expect(!lateCallback)
     }
 
     @Test func cookieComparisonRejectsUnchangedExpiredWrongPathAndForeignDomain() throws {
