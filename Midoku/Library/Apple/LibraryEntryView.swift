@@ -13,6 +13,7 @@ struct LibraryEntryView: View {
     @State private var removing = false
     @State private var resetting = false
     @State private var selecting = false
+    @State private var showingClipboard = false
     @State private var selected: Set<UUID> = []
     @State private var filter = "all"
     @State private var sourceID: UUID?
@@ -47,8 +48,8 @@ struct LibraryEntryView: View {
                             Text("\(entry.slots.count) chapters").font(.subheadline.weight(.semibold))
                             Spacer()
                             filters(entry)
-                            NavigationLink { ClipboardView() } label: { Label("Chapter clipboard", systemImage: "doc.on.clipboard").labelStyle(.iconOnly).frame(width: 44, height: 44) }.buttonStyle(.plain)
-                            Button(selecting ? "Done" : "Select") { selecting.toggle(); selected.removeAll() }
+                            Button { showingClipboard = true } label: { Label("Chapter clipboard", systemImage: "doc.on.clipboard").labelStyle(.iconOnly).frame(width: 44, height: 44) }.buttonStyle(.plain)
+                            Button(selecting ? "Done" : "Select") { selecting.toggle(); selected.removeAll() }.buttonStyle(.borderless)
                         }
                         if entry.slots.isEmpty {
                             VStack(alignment: .leading, spacing: 12) {
@@ -85,6 +86,7 @@ struct LibraryEntryView: View {
             if CommandLine.arguments.contains("--rename-preview"), renamedSlot == nil { renamedSlot = entry?.slots.first }
         }
         #endif
+        .navigationDestination(isPresented: $showingClipboard) { ClipboardView() }
         .safeAreaInset(edge: .bottom) { if selecting { selectionBar } }
         .sheet(isPresented: $editing) { if let entry { EntryEditor(entry: entry, extensions: extensions) } }
         .sheet(isPresented: $sources) { EntrySourcesView(entryID: entryID, extensions: extensions) }

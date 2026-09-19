@@ -9,6 +9,7 @@ struct SourceEntryView: View {
     @Environment(LibraryCoordinator.self) private var library
     @State private var adding = false
     @State private var selecting = false
+    @State private var showingClipboard = false
     @State private var selected: Set<String> = []
     @State private var actionMessage: String?
     @State private var details: MangaDetails?
@@ -100,7 +101,7 @@ struct SourceEntryView: View {
                         } else { Text(chapterLanguage.isEmpty ? "Chapters" : chapterLanguage.uppercased()).font(.subheadline) }
                         Spacer(minLength: 0)
                         Button(selecting ? "Done" : "Select") { selecting.toggle(); selected.removeAll() }.buttonStyle(.borderless)
-                        NavigationLink { ClipboardView() } label: {
+                        Button { showingClipboard = true } label: {
                             Label("Chapter clipboard", systemImage: "doc.on.clipboard").labelStyle(.iconOnly).frame(width: 44, height: 44)
                         }.buttonStyle(.plain)
                     }
@@ -186,6 +187,7 @@ struct SourceEntryView: View {
                 }
             }.sharedBackgroundVisibility(.hidden)
         }
+        .navigationDestination(isPresented: $showingClipboard) { ClipboardView() }
         .safeAreaInset(edge: .bottom) {
             if selecting {
                 HStack {
@@ -234,7 +236,7 @@ struct SourceEntryView: View {
     private func addToLibrary() {
         guard let details, !adding else { return }
         adding = true; actionMessage = nil
-        let records = chapters.isStale ? [] : chapters.items
+        let records = chapters.isStale || loadedChapterQuery?.language != chapterLanguage ? [] : chapters.items
         let language = chapterLanguage.isEmpty ? nil : chapterLanguage
         Task {
             do {
