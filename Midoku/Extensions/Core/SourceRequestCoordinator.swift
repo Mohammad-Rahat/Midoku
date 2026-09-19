@@ -107,7 +107,7 @@ actor SourceRequestCoordinator {
             if response.isChallenge {
                 guard !hasVerified else { throw ExtensionFailure.verificationFailed }
                 guard interaction == .foreground else { throw ExtensionFailure.verificationRequired }
-                try await verification.resolve(SourceChallenge(connection: connection, url: currentURL, policy: policy))
+                try await verification.resolve(SourceChallenge(connection: connection, url: currentURL, policy: policy, headers: request.allHTTPHeaderFields ?? [:]))
                 hasVerified = true
                 continue
             }
@@ -152,7 +152,7 @@ actor SourceRequestCoordinator {
                 } catch ExtensionFailure.verificationRequired {
                     guard !hasVerified else { throw ExtensionFailure.verificationFailed }
                     guard interaction == .foreground else { throw ExtensionFailure.verificationRequired }
-                    try await verification.resolve(SourceChallenge(connection: connection, url: currentURL, policy: policy))
+                    try await verification.resolve(SourceChallenge(connection: connection, url: currentURL, policy: policy, headers: request.allHTTPHeaderFields ?? [:]))
                     hasVerified = true
                     continue
                 }
@@ -183,3 +183,4 @@ nonisolated struct NetworkExtensionHost: ExtensionHost {
 protocol SourceBrowserRendering: Sendable {
     func render(_ response: SourceHTTPResponse, script: String, connection: SourceConnection, policy: SourceRequestPolicy) async throws -> SourceHTTPResponse
 }
+

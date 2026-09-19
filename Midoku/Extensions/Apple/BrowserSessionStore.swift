@@ -17,6 +17,12 @@ final class BrowserSessionStore: SourceSessionProviding {
     func makeWebView(for connectionID: UUID) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = dataStore(for: connectionID)
+        if let userAgent = userAgents[connectionID],
+           userAgent.contains("iPhone") || userAgent.contains("iPad") {
+            // Cloudflare binds clearance to browser characteristics. Keep WebKit's
+            // rendering mode aligned with the mobile UA used by the native request.
+            configuration.defaultWebpagePreferences.preferredContentMode = .mobile
+        }
         let view = WKWebView(frame: .zero, configuration: configuration)
         if let userAgent = userAgents[connectionID] {
             view.customUserAgent = userAgent
@@ -61,4 +67,3 @@ final class BrowserSessionStore: SourceSessionProviding {
     }
 
 }
-

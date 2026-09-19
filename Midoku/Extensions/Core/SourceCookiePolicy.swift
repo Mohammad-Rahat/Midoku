@@ -19,4 +19,17 @@ nonisolated enum SourceCookiePolicy {
         return path == cookie.path || (path.hasPrefix(cookie.path) &&
             (cookie.path.hasSuffix("/") || path.dropFirst(cookie.path.count).hasPrefix("/")))
     }
+
+    static func hasFreshCloudflareClearance(
+        in cookies: [HTTPCookie],
+        for url: URL,
+        previousValue: String?,
+        now: Date = Date()
+    ) -> Bool {
+        cookies.contains { cookie in
+            cookie.name == "cf_clearance" &&
+                cookie.value != previousValue &&
+                matches(cookie, url: url, now: now)
+        }
+    }
 }

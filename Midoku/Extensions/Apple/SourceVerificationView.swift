@@ -14,7 +14,7 @@ struct SourceVerificationView: View {
                     Text(challenge.url.host ?? challenge.connection.name)
                         .font(.headline)
                         .textSelection(.enabled)
-                    Text("Complete the website’s verification below, then retry your request.")
+                    Text("Complete the website’s verification below. Midoku will retry automatically when verification succeeds.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     if let loadError {
@@ -24,18 +24,18 @@ struct SourceVerificationView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding()
                 Divider()
-                VerificationBrowser(challenge: challenge, sessions: sessions) { message in
-                    loadError = message
-                }
+                VerificationBrowser(
+                    challenge: challenge,
+                    sessions: sessions,
+                    onVerified: { coordinator.retry(id: challenge.id) },
+                    onError: { loadError = $0 }
+                )
             }
             .navigationTitle("Verify source")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { coordinator.cancel(id: challenge.id) }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Retry request") { coordinator.retry(id: challenge.id) }
                 }
             }
         }
@@ -46,34 +46,102 @@ struct SourceVerificationView: View {
 private struct VerificationBrowser: UIViewRepresentable {
     let challenge: SourceChallenge
     let sessions: BrowserSessionStore
+    let onVerified: () -> Void
     let onError: (String) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(policy: challenge.policy, onError: onError)
+        Coordinator(challenge: challenge, onVerified: onVerified, onError: onError)
     }
 
     func makeUIView(context: Context) -> WKWebView {
         let webView = sessions.makeWebView(for: challenge.connection.id)
         webView.navigationDelegate = context.coordinator
-        webView.load(URLRequest(url: challenge.url))
+        context.coordinator.start(in: webView)
         return webView
     }
 
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 
     static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
+        coordinator.stop()
         uiView.stopLoading()
         uiView.navigationDelegate = nil
     }
 
     @MainActor
     final class Coordinator: NSObject, WKNavigationDelegate {
-        let policy: SourceRequestPolicy
-        let onError: (String) -> Void
+        private static let challengePageScript = """
+        (() => {
+            const title = (document.title || '').toLowerCase();
+            return Boolean(
+                document.querySelector('input[name="cf-turnstile-response"], #challenge-running, #challenge-stage, form#challenge-form, #challenge-error-title, #challenge-error-text') ||
+                title === 'just a moment...'
+            );
+        })()
+        """
 
-        init(policy: SourceRequestPolicy, onError: @escaping (String) -> Void) {
-            self.policy = policy
+        let challenge: SourceChallenge
+        let onVerified: () -> Void
+        let onError: (String) -> Void
+        private var previousClearanceValue: String?
+        private var monitorTask: Task<Void, Never>?
+        private var didComplete = false
+
+        init(challenge: SourceChallenge, onVerified: @escaping () -> Void, onError: @escaping (String) -> Void) {
+            self.challenge = challenge
+            self.onVerified = onVerified
             self.onError = onError
+        }
+
+        func start(in webView: WKWebView) {
+            monitorTask?.cancel()
+            monitorTask = Task { [weak self, weak webView] in
+                guard let self, let webView else { return }
+                let cookieStore = webView.configuration.websiteDataStore.httpCookieStore
+                let existing = await cookieStore.allCookies()
+                previousClearanceValue = existing.first {
+                    $0.name == "cf_clearance" &&
+                        SourceCookiePolicy.domainMatches($0, host: challenge.url.host ?? "")
+                }?.value
+                guard !Task.isCancelled else { return }
+
+                var request = URLRequest(url: challenge.url)
+                for (name, value) in challenge.headers {
+                    request.setValue(value, forHTTPHeaderField: name)
+                }
+                if let userAgent = challenge.headers.first(where: {
+                    $0.key.caseInsensitiveCompare("User-Agent") == .orderedSame
+                })?.value {
+                    webView.customUserAgent = userAgent
+                }
+                webView.load(request)
+
+                while !Task.isCancelled && !didComplete {
+                    try? await Task.sleep(for: .milliseconds(500))
+                    guard !Task.isCancelled else { return }
+                    await checkCompletion(in: webView)
+                }
+            }
+        }
+
+        func stop() {
+            monitorTask?.cancel()
+            monitorTask = nil
+        }
+
+        private func checkCompletion(in webView: WKWebView) async {
+            guard !didComplete else { return }
+            let cookies = await webView.configuration.websiteDataStore.httpCookieStore.allCookies()
+            guard SourceCookiePolicy.hasFreshCloudflareClearance(
+                in: cookies,
+                for: challenge.url,
+                previousValue: previousClearanceValue
+            ) else { return }
+            let result = try? await webView.evaluateJavaScript(Self.challengePageScript)
+            guard result as? Bool == false else { return }
+            didComplete = true
+            monitorTask?.cancel()
+            onVerified()
         }
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
@@ -83,10 +151,16 @@ private struct VerificationBrowser: UIViewRepresentable {
                url.scheme == "https", url.host == "challenges.cloudflare.com" {
                 return .allow
             }
-            guard navigationAction.targetFrame != nil, (try? policy.validate(url)) != nil else {
+            if navigationAction.targetFrame == nil {
+                guard (try? challenge.policy.validate(url)) != nil else { return .cancel }
+                webView.load(navigationAction.request)
                 return .cancel
             }
-            return .allow
+            return (try? challenge.policy.validate(url)) != nil ? .allow : .cancel
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            Task { await checkCompletion(in: webView) }
         }
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: any Error) {

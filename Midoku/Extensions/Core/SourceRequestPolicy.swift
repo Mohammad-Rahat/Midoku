@@ -96,12 +96,14 @@ nonisolated struct SourceChallenge: Identifiable, Sendable {
     let connection: SourceConnection
     let url: URL
     let policy: SourceRequestPolicy
+    let headers: [String: String]
 
-    init(connection: SourceConnection, url: URL, policy: SourceRequestPolicy) {
+    init(connection: SourceConnection, url: URL, policy: SourceRequestPolicy, headers: [String: String] = [:]) {
         self.id = UUID()
         self.connection = connection
         self.url = url
         self.policy = policy
+        self.headers = headers
     }
 }
 
@@ -125,4 +127,5 @@ nonisolated struct UnavailableChallengeResolver: ChallengeResolving {
         throw ExtensionFailure.verificationRequired
     }
 }
+
 

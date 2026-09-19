@@ -36,12 +36,18 @@ private actor StubSession: SourceSessionProviding {
 
 private actor StubResolver: ChallengeResolving {
     var count = 0
+    var receivedHeaders: [String: String] = [:]
     let session: StubSession
 
     init(session: StubSession) { self.session = session }
     func resolve(_ challenge: SourceChallenge) async throws {
         count += 1
+        receivedHeaders = challenge.headers
         await session.verify()
+    }
+
+    func receivedHeader(_ name: String) -> String? {
+        receivedHeaders.first { $0.key.caseInsensitiveCompare(name) == .orderedSame }?.value
     }
 }
 
@@ -164,6 +170,28 @@ struct RequestTests {
             cookie, url: try #require(URL(string: "https://example.com/reader")),
             now: now.addingTimeInterval(7200)
         ))
+
+        let oldClearance = try #require(HTTPCookie(properties: [
+            .name: "cf_clearance", .value: "old", .domain: ".example.com",
+            .path: "/", .secure: "TRUE", .expires: now.addingTimeInterval(3600)
+        ]))
+        let newClearance = try #require(HTTPCookie(properties: [
+            .name: "cf_clearance", .value: "new", .domain: ".example.com",
+            .path: "/", .secure: "TRUE", .expires: now.addingTimeInterval(3600)
+        ]))
+        let clearanceURL = try #require(URL(string: "https://example.com/reader"))
+        #expect(!SourceCookiePolicy.hasFreshCloudflareClearance(
+            in: [oldClearance], for: clearanceURL, previousValue: "old", now: now
+        ))
+        #expect(SourceCookiePolicy.hasFreshCloudflareClearance(
+            in: [oldClearance, newClearance], for: clearanceURL, previousValue: "old", now: now
+        ))
+        #expect(!SourceCookiePolicy.hasFreshCloudflareClearance(
+            in: [newClearance],
+            for: try #require(URL(string: "https://example.com.evil.org/reader")),
+            previousValue: "old",
+            now: now
+        ))
     }
 
     @Test func permissionsAreExactAndHeadersCannotOverrideSessions() throws {
@@ -207,6 +235,7 @@ struct RequestTests {
         #expect(sent[0].value(forHTTPHeaderField: "Cookie") == nil)
         #expect(sent[1].value(forHTTPHeaderField: "Cookie") == "clearance=fixture")
         #expect(sent[0].value(forHTTPHeaderField: "User-Agent") == sent[1].value(forHTTPHeaderField: "User-Agent"))
+        #expect(await resolver.receivedHeader("User-Agent") == "FixtureBrowser")
     }
 
     @Test func repeatedChallengeDoesNotLoopAndBackgroundNeverPresentsUI() async throws {
@@ -350,3 +379,4 @@ struct BrowserExtractionTests {
         #expect(await transport.requests.isEmpty)
     }
 }
+
