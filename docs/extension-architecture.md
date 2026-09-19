@@ -35,12 +35,18 @@ The native host, not individual adapters, owns this sequence:
 3. A foreground request may present a visible verification sheet using that
    connection's persistent WebKit profile. Background requests return
    `verificationRequired` without presenting UI.
-4. Let the user complete the real website challenge. The sheet restricts navigation
-   to declared source hosts and Cloudflare's verification frame host. WebKit
+4. Attach one native WebKit view before loading the real URL. After a short initial
+   check, expose that same view for user interaction. Keep the connection's persistent
+   profile and native request's WebKit-derived User-Agent; WebKit owns the Cookie header.
+   Main-frame navigation remains restricted to declared source hosts. Verification
+   subframes also allow Cloudflare's host, `about:blank`, `about:srcdoc`, and blob
+   documents originating from those permitted HTTPS origins. WebKit
    subresources are browser-managed; this is not a comprehensive WebKit network sandbox.
-5. “Retry request” reloads cookies from that same profile and retries the original
-   native request once. The second HTTP response establishes success. A cookie or
-   a completed navigation does not.
+5. A fresh, applicable clearance cookie plus a completed successful source page
+   without a challenge triggers one native retry, re-reading this same cookie store.
+   The second HTTP response establishes success, not a cookie or navigation alone.
+   There is no global cookie-store handoff. A 90-second deadline, Reload and redacted
+   connection details make unsuccessful verification recoverable.
 6. Repeated challenges stop with a recoverable error. Cancellation releases the
    waiting operation; other connections remain independent. Additional same-source
    requests wait behind the single active flow and reuse the updated session.
@@ -116,6 +122,8 @@ remain separate implementation milestones.
 
 - [Cloudflare challenge response detection](https://developers.cloudflare.com/cloudflare-challenges/challenge-types/challenge-pages/detect-response/)
 - [Cloudflare clearance](https://developers.cloudflare.com/cloudflare-challenges/concepts/clearance/)
+- [Cloudflare mobile WebView requirements](https://developers.cloudflare.com/turnstile/get-started/mobile-implementation/)
+- [Aidoku lifecycle comparison and Midoku differences](cloudflare-verification.md)
 - [Cloudflare supported browsers and WebView limitations](https://developers.cloudflare.com/cloudflare-challenges/reference/supported-browsers/)
 - [Apple persistent WebKit profiles](https://developer.apple.com/documentation/webkit/wkwebsitedatastore/init(foridentifier:))
 - [Apple WebKit cookie store](https://developer.apple.com/documentation/webkit/wkhttpcookiestore)

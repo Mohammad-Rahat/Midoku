@@ -26,9 +26,20 @@ nonisolated enum SourceCookiePolicy {
         previousValue: String?,
         now: Date = Date()
     ) -> Bool {
+        hasFreshCloudflareClearance(
+            in: cookies, for: url, previousValues: Set(previousValue.map { [$0] } ?? []), now: now
+        )
+    }
+
+    static func hasFreshCloudflareClearance(
+        in cookies: [HTTPCookie],
+        for url: URL,
+        previousValues: Set<String>,
+        now: Date = Date()
+    ) -> Bool {
         cookies.contains { cookie in
             cookie.name == "cf_clearance" &&
-                cookie.value != previousValue &&
+                !cookie.value.isEmpty && !previousValues.contains(cookie.value) &&
                 matches(cookie, url: url, now: now)
         }
     }

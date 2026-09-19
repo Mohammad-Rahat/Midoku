@@ -58,8 +58,9 @@ private final class BrowserNavigation: NSObject, WKNavigationDelegate {
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
         guard let url = navigationAction.request.url, navigationAction.targetFrame != nil else { return .cancel }
         if url.absoluteString == "about:blank" { return .allow }
-        if navigationAction.targetFrame?.isMainFrame == false, url.scheme == "https", url.host == "challenges.cloudflare.com" { return .allow }
-        return (try? policy.validate(url)) != nil ? .allow : .cancel
+        return SourceVerificationPolicy.allowsNavigation(
+            to: url, isMainFrame: navigationAction.targetFrame?.isMainFrame != false, policy: policy
+        ) ? .allow : .cancel
     }
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: any Error) {
         if (error as NSError).code != NSURLErrorCancelled { failure = .invalidResponse("Website could not load.") }

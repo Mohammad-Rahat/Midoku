@@ -1,3 +1,10 @@
+# Cloudflare / NovelCrow device follow-up — 2026-09-19
+
+- Compared Aidoku's current native handler at pinned commit `8ae2da15` and Cloudflare's mobile requirements. Corrected the missing `about:srcdoc` frame allowance and stale native Cookie-header replay; these are confirmed defects, not proof of the sole device-loop cause.
+- Verification now attaches a native browser before loading and reveals that same view for interaction. Cookies, local storage, UA and rendering mode stay within one persistent source profile. Removed the unsuccessful global default-store experiment and per-attempt cookie purges.
+- Added required local/blob/Cloudflare frame permissions without expanding native HTTP access, finished-page/fresh-cookie gating, stale-callback cancellation, a separate 90-second watchdog, Reload, and redacted connection details.
+- Added eight regression tests for frame policy, request ownership, DOM/cookie state and completion races. Local typecheck/bundling and all 27 Node checks pass. Native Swift tests and the unsigned iOS archive are verified by the IPA workflow after this commit; device clearance remains unverified. See [implementation and device checklist](cloudflare-verification.md).
+
 # Native tabs, compact entries and library choices — 2026-09-19
 
 - Restored SwiftUI native Liquid Glass tabs with independent navigation stacks and system safe-area handling. Removed the custom tab strip and its visibility preference; reader routes hide native tabs through the toolbar API.

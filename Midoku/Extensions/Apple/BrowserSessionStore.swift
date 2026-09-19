@@ -18,12 +18,6 @@ final class BrowserSessionStore: SourceSessionProviding {
         makeWebView(for: connectionID, dataStore: dataStore(for: connectionID))
     }
 
-    /// Cloudflare's challenge runtime is tested against WebKit's default browser store.
-    /// Solved cookies are copied back to the connection-specific profile afterward.
-    func makeVerificationWebView(for connectionID: UUID) -> WKWebView {
-        makeWebView(for: connectionID, dataStore: .default())
-    }
-
     private func makeWebView(for connectionID: UUID, dataStore: WKWebsiteDataStore) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = dataStore
@@ -38,40 +32,6 @@ final class BrowserSessionStore: SourceSessionProviding {
             view.customUserAgent = userAgent
         }
         return view
-    }
-
-    func prepareVerification(for url: URL, connectionID: UUID) async {
-        let sourceStore = dataStore(for: connectionID).httpCookieStore
-        let verificationStore = WKWebsiteDataStore.default().httpCookieStore
-        let sourceCookies = await sourceStore.allCookies()
-        let verificationCookies = await verificationStore.allCookies()
-
-        // The request was challenged, so any existing clearance is stale. Mihon
-        // removes it before opening WebView; doing the same prevents challenge loops.
-        for cookie in sourceCookies where cookie.name == "cf_clearance" &&
-            SourceCookiePolicy.domainMatches(cookie, host: url.host ?? "") {
-            await sourceStore.deleteCookie(cookie)
-        }
-        for cookie in verificationCookies where
-            SourceCookiePolicy.domainMatches(cookie, host: url.host ?? "") {
-            await verificationStore.deleteCookie(cookie)
-        }
-        for cookie in sourceCookies where cookie.name != "cf_clearance" &&
-            SourceCookiePolicy.matches(cookie, url: url) {
-            await verificationStore.setCookie(cookie)
-        }
-    }
-
-    func importVerificationCookies(for url: URL, connectionID: UUID) async {
-        let sourceStore = dataStore(for: connectionID).httpCookieStore
-        let verificationStore = WKWebsiteDataStore.default().httpCookieStore
-        let allCookies = await verificationStore.allCookies()
-        let cookies = allCookies.filter {
-            SourceCookiePolicy.matches($0, url: url)
-        }
-        for cookie in cookies {
-            await sourceStore.setCookie(cookie)
-        }
     }
 
     func clearSession(for connectionID: UUID) async {
