@@ -31,7 +31,7 @@ actor MangaBakaApi {
             "client_id": oauth.clientId,
             "refresh_token": refreshToken,
             "grant_type": "refresh_token",
-            "redirect_uri": "midoku://mangabaka-auth"
+            "redirect_uri": "aidoku://mangabaka-auth"
         ].percentEncoded()
         let response: OAuthResponse? = try? await URLSession.shared.object(from: request)
         await oauth.setTokens(response)

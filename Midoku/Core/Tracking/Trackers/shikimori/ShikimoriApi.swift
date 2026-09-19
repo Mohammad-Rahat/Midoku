@@ -35,7 +35,7 @@ extension ShikimoriApi {
             "grant_type": "authorization_code",
             "client_id": oauth.clientId,
             "client_secret": oauth.clientSecret!,
-            "redirect_uri": "midoku://shikimori-auth",
+            "redirect_uri": "aidoku://shikimori-auth",
             "scope": "users_rate",
             "code": authCode
         ], boundary: boundary)

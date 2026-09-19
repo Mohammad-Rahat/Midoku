@@ -39,7 +39,7 @@ actor BangumiApi {
             "client_id": oauth.clientId,
             "client_secret": oauth.clientSecret!,
             "code": authCode,
-            "redirect_uri": "midoku://bangumi-auth"
+            "redirect_uri": "aidoku://bangumi-auth"
         ]
         request.httpBody = body.percentEncoded()
 
@@ -62,7 +62,7 @@ actor BangumiApi {
             "client_id": oauth.clientId,
             "client_secret": oauth.clientSecret!,
             "refresh_token": refreshToken,
-            "redirect_uri": "midoku://bangumi-auth"
+            "redirect_uri": "aidoku://bangumi-auth"
         ]
         request.httpBody = body.percentEncoded()
 

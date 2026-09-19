@@ -17,6 +17,6 @@ Collection backups are included in the normal `.aib` backup when collection entr
 
 ## Attribution
 
-This derivative includes Aidoku code under GNU GPL v3 (see `LICENSE`). Original authorship and copyright notices are retained. AidokuRunner, source ABI names, compatible file protocols and upstream dependency/documentation URLs intentionally retain their original names. This is an independent Midoku fork, not an official Aidoku release.
+This derivative includes Aidoku code under GNU GPL v3 (see `LICENSE`). Original authorship and copyright notices are retained. AidokuRunner, source ABI names, compatible file protocols, registered tracker/source authentication callbacks and upstream dependency/documentation URLs intentionally retain their original names. This is an independent Midoku fork, not an official Aidoku release.
 
 Base: Aidoku-M `0a17679b67bd8379d6f09de6a3d73054118b60a8`; Midoku collection model and assets: `23ffc8e002ff5f607a4d89f6fdbebe997e529fb4`.

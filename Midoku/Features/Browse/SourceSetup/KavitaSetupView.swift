@@ -57,7 +57,7 @@ struct KavitaSetupView: View {
                 canLoginBasic: !response.disablePasswordAuthentication,
                 canLoginApiKey: canLoginApiKey,
                 canLoginOIDC: response.enabled,
-                oidcLoginURL: URL(string: server + "/oidc/login?returnURL=midoku://oidc-auth")
+                oidcLoginURL: URL(string: server + "/oidc/login?returnURL=aidoku://oidc-auth")
             )
         }
 

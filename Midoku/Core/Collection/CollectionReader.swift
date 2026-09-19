@@ -13,7 +13,7 @@ final class MCReaderSequence {
         var identifier: ChapterIdentifier {
             .init(sourceKey: manga.sourceKey, mangaKey: manga.key, chapterKey: chapter.key)
         }
-        var source: AidokuRunner.Source? { SourceStore.shared.source(for: manga.sourceKey) }
+        @MainActor var source: AidokuRunner.Source? { SourceStore.shared.source(for: manga.sourceKey) }
     }
     let entryID: UUID
     let title: String
@@ -21,7 +21,8 @@ final class MCReaderSequence {
     let initialKey: String
     var chapters: [AidokuRunner.Chapter] { routes.map(\.displayChapter) }
 
-    init(entryID: UUID, slotID: UUID, store: MCCollectionStore = .shared) throws {
+    init(entryID: UUID, slotID: UUID, store: MCCollectionStore? = nil) throws {
+        let store = store ?? .shared
         guard let entry = store.library.entry(entryID) else { throw MCLibraryFailure.missing }
         self.entryID = entryID
         title = store.library.title(entry)

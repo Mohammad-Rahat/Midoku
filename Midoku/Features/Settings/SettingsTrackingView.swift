@@ -302,7 +302,7 @@ extension SettingsTrackingView {
     func login(to tracker: Tracker) async {
         if let tracker = tracker as? OAuthTracker {
             guard let url = await tracker.getAuthenticationUrl() else { return }
-            let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "midoku") { callbackURL, error in
+            let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "aidoku") { callbackURL, error in
                 if let error {
                     LogManager.logger.error("Tracker authentication error: \(error.localizedDescription)")
                 }

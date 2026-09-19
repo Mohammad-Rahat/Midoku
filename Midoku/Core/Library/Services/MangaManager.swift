@@ -176,7 +176,7 @@ extension MangaManager {
                 LogManager.logger.error("MangaManager.addToLibrary: \(error.localizedDescription)")
             }
         }
-        await MainActor.run {
+        await MainActor.run { [manga, chapters] in
             do { _ = try MCCollectionStore.shared.add(manga, chapters: chapters) }
             catch { MCCollectionStore.shared.error = error.localizedDescription }
         }

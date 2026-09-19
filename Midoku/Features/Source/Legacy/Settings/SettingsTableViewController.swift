@@ -380,7 +380,7 @@ extension SettingsTableViewController {
                     self.tableView.cellForRow(at: indexPath)?.accessoryType = .none
                     self.tableView.cellForRow(at: indexPath)?.textLabel?.text = item.title
                 } else { // log in
-                    let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "midoku") { callbackURL, error in
+                    let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "aidoku") { callbackURL, error in
                         if let error = error {
                             let sourceInfoString = self.source != nil ? " for \(self.source?.manifest.info.name ?? "source")" : ""
                             LogManager.logger.error("Log-in authentication error\(sourceInfoString): \(error.localizedDescription)")

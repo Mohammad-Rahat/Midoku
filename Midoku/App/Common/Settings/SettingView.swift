@@ -1112,7 +1112,7 @@ extension SettingView {
 
         session = ASWebAuthenticationSession(
             url: url,
-            callbackURLScheme: value.callbackScheme ?? "midoku"
+            callbackURLScheme: value.callbackScheme ?? "aidoku"
         ) { callback, error in
             guard let callback else {
                 LogManager.logger.error("No callback URL received")
