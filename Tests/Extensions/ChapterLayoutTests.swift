@@ -4,6 +4,20 @@ import Testing
 
 @Suite("Chapter layout persistence")
 struct ChapterLayoutTests {
+    @Test func oldGridDefaultsAndAllPresentationsRoundTrip() throws {
+        let old = Data(#"{"style":"grid","portraitColumns":3,"landscapeColumns":5}"#.utf8)
+        let decoded = try JSONDecoder().decode(ChapterLayoutPreferences.self, from: old)
+        #expect(decoded.resolvedGridStyle == .standard)
+        for style in ChapterGridStyle.allCases {
+            var snapshot = AppSnapshot()
+            snapshot.preferences.chapterLayout = ChapterLayoutPreferences(style: .grid,
+                portraitColumns: 4, landscapeColumns: 6, gridStyle: style)
+            let (_, restored) = try BackupArchive.decode(BackupArchive(snapshot: snapshot, extensions: [], appVersion: "test").encoded())
+            #expect(restored.preferences.resolvedChapterLayout.resolvedGridStyle == style)
+            #expect(restored.preferences.resolvedChapterLayout.portraitColumns == 4)
+            try restored.validate()
+        }
+    }
     @Test func existingSettingsKeepListAndMangaCounts() throws {
         var settings = AppSnapshot()
         settings.preferences.libraryLayout = LibraryLayoutPreferences(style: .custom, portraitColumns: 4, landscapeColumns: 7)

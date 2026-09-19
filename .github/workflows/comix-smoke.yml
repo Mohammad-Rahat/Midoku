@@ -18,5 +18,10 @@ jobs:
         env:
           DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
         run: |
-          cat Midoku/Extensions/Core/SourceBrowserRules.swift Tools/comix-smoke.swift > "$RUNNER_TEMP/comix-smoke.swift"
+          cat Midoku/Extensions/Core/ExtensionContract.swift \
+              Midoku/Extensions/Core/SourceRequestPolicy.swift \
+              Midoku/Extensions/Core/SourceRequestCoordinator.swift \
+              Midoku/Extensions/Core/URLSessionSourceTransport.swift \
+              Midoku/Extensions/Core/ComixImageDecoder.swift \
+              Midoku/Extensions/Core/SourceBrowserRules.swift Tools/comix-smoke.swift > "$RUNNER_TEMP/comix-smoke.swift"
           swift "$RUNNER_TEMP/comix-smoke.swift"

@@ -30,7 +30,9 @@ let script = #"""
    const chapter=await http.get('/chapters/'+record.id);
    const pages=chapter.pages,items=Array.isArray(pages)?pages:pages.items;
    const urls=items.map(x=>x.url.startsWith('http')?x.url:(pages.baseUrl||'').replace(/\/$/,'')+'/'+x.url.replace(/^\//,''));
-   samples.push({chapterID:String(record.id),number:record.number,pageCount:items.length,pageKeys:Object.keys(items[0]||{}),hosts:[...new Set(urls.map(x=>new URL(x).hostname))]});
+   let first=urls[0];
+   if((items[0]?.s===1||items[0]?.scramble===true)&&!/[?&]v3(?:&|$)/.test(first)) first+=(first.includes('?')?'&':'?')+'v3';
+   samples.push({chapterID:String(record.id),number:record.number,pageCount:items.length,pageKeys:Object.keys(items[0]||{}),hosts:[...new Set(urls.map(x=>new URL(x).hostname))],firstPage:first});
  }
  window.smokeResult=JSON.stringify({ok:true,mangaID:item.hid,coverHost:new URL(item.poster.medium).hostname,samples});
 }catch(e){window.smokeResult=JSON.stringify({ok:false,error:String(e)});}})();void 0;
@@ -47,7 +49,7 @@ guard let sourceURL = URL(string: "https://comix.to/browse") else { exit(1) }
 Task { @MainActor in
     do {
         let (data, _) = try await URLSession.shared.data(from: sourceURL)
-        let rules = try SourceBrowserRules.encoded(domains: ["comix.to", "comix.ws", "static.comix.to", "*.wowpic2.store"])
+        let rules = try SourceBrowserRules.encoded(domains: ["comix.to", "comix.ws", "static.comix.to", "*.wowpic2.store", "*.wowpic1.store"])
         if let blocker = try await WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "midoku-comix-smoke", encodedContentRuleList: rules) { web.configuration.userContentController.add(blocker) }
         let html = String(decoding: data, as: UTF8.self).replacingOccurrences(of: "type=\"module\"", with: "type=\"application/x-midoku-module\"")
         web.loadHTMLString(html, baseURL: sourceURL)
@@ -57,7 +59,34 @@ Task { @MainActor in
     let deadline = Date().addingTimeInterval(90)
     while Date() < deadline {
         if let value = try? await web.evaluateJavaScript("window.smokeResult || null"), let result = value as? String {
-            print(result); fflush(stdout); exit(0)
+            do {
+                var output = (try JSONSerialization.jsonObject(with: Data(result.utf8))) as? [String: Any] ?? [:]
+                let manifest = try JSONDecoder().decode(ExtensionManifest.self,
+                    from: Data(contentsOf: URL(fileURLWithPath: "Extensions/sources/dev.midoku.comix/manifest.json")))
+                let connection = SourceConnection(extensionID: manifest.id, name: manifest.name)
+                let coordinator = SourceRequestCoordinator(transport: URLSessionSourceTransport(),
+                    sessions: EmptySourceSession(), verification: UnavailableChallengeResolver())
+                var samples = output["samples"] as? [[String: Any]] ?? []
+                for index in samples.indices {
+                    // Full page URLs remain private to the probe, never written to logs.
+                    let address = samples[index].removeValue(forKey: "firstPage") as? String
+                    guard let address, let url = URL(string: address) else { continue }
+                    do {
+                        let response = try await coordinator.request(SourceHTTPRequest(url: url, headers: ["Referer": "https://comix.to/"]),
+                            connection: connection, manifest: manifest, interaction: .background, kind: .image)
+                        let body = try ComixImageDecoder.decode(response, processor: manifest.imageProcessing)
+                        guard let source = CGImageSourceCreateWithData(body as CFData, nil),
+                              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+                            throw ExtensionFailure.invalidResponse("Unsupported image")
+                        }
+                        samples[index]["decodedWidth"] = image.width
+                        samples[index]["decodedHeight"] = image.height
+                    } catch { samples[index]["imageError"] = error.localizedDescription }
+                }
+                output["samples"] = samples
+                let data = try JSONSerialization.data(withJSONObject: output, options: [.sortedKeys])
+                print(String(decoding: data, as: UTF8.self)); fflush(stdout); exit(0)
+            } catch { print("Image probe failed:", error.localizedDescription); exit(1) }
         }
         try? await Task.sleep(for: .seconds(1))
     }

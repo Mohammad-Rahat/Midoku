@@ -87,7 +87,7 @@ struct ChapterCoverView: View {
                         guard let page = try await adapter.pages(mangaID: identity.listing.externalID, chapterID: identity.externalID).first else { return }
                         try Task.checkCancellation()
                         image = try await extensions.images.image(url: page.url, headers: page.headers, connection: adapter.connection,
-                            manifest: adapter.manifest, maximumDimension: 720, interaction: .background)
+                            manifest: adapter.manifest, maximumDimension: 720, interaction: .background, kind: .thumbnail)
                     }
                     try Task.checkCancellation()
                     await ChapterThumbnailCache.shared.store(image, identity: identity)

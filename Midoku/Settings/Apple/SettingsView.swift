@@ -209,7 +209,7 @@ struct LibrarySettingsView: View {
         .task {
             if CommandLine.arguments.contains("--chapter-settings-preview") {
                 try? await Task.sleep(for: .milliseconds(300))
-                proxy.scrollTo("chapter-layout", anchor: .bottom)
+                proxy.scrollTo("chapter-layout-end", anchor: .bottom)
             }
         }
         #endif

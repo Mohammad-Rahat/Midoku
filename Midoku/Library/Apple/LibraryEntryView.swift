@@ -77,7 +77,7 @@ struct LibraryEntryView: View {
                 }.settingsStyle().refreshable { await library.refresh(entryIDs: [entryID]) }
                 #if DEBUG
                 .task {
-                    if CommandLine.arguments.contains("--chapters-preview") || CommandLine.arguments.contains("--chapter-grid-preview") || CommandLine.arguments.contains("--empty-clipboard-preview") {
+                    if ["--chapters-preview", "--chapter-grid-preview", "--chapter-compact-preview", "--chapter-thumbnail-preview", "--empty-clipboard-preview"].contains(where: CommandLine.arguments.contains) {
                         try? await Task.sleep(for: .milliseconds(300))
                         proxy.scrollTo("chapter-header", anchor: .top)
                     }
@@ -178,17 +178,13 @@ struct LibraryEntryView: View {
             HStack(spacing: 8) {
                 if selecting { Button { toggle(slot.id) } label: { rowLabel(slot, variant: variant, chapter: chapter, entry: entry) }.buttonStyle(.plain) }
                 else { NavigationLink { LibraryReaderView(entryID: entryID, initialSlotID: slot.id, extensions: extensions) } label: { rowLabel(slot, variant: variant, chapter: chapter, entry: entry) } }
-                chapterActions(slot, chapter: chapter, entry: entry)
             }.contextMenu {
-                Button("Copy", systemImage: "doc.on.doc") { copy([slot.id]) }
-                Button("Select", systemImage: "checkmark.circle") { selecting = true; selected.insert(slot.id) }
-                Button("Rename chapter", systemImage: "character.cursor.ibeam") { renamedSlot = slot }
-                Button("Edit", systemImage: "pencil") { editedSlot = slot }
+                chapterActions(slot, chapter: chapter, entry: entry)
             }
         }
     }
     private func chapterActions(_ slot: ChapterSlot, chapter: LibraryChapter, entry: PersonalEntry) -> some View {
-        Menu {
+        Group {
             Button("Copy chapter", systemImage: "doc.on.doc") { copy([slot.id]) }
             Button("Rename chapter", systemImage: "character.cursor.ibeam") { renamedSlot = slot }
             Button("Edit chapter", systemImage: "pencil") { editedSlot = slot }
@@ -200,7 +196,7 @@ struct LibraryEntryView: View {
             if let listing = state.listings.first(where: { $0.identity == chapter.identity.listing }) { Button("Open original listing", systemImage: "arrow.up.right.square") { originalListing = listing } }
             Button("Select", systemImage: "checkmark.circle") { selecting = true; selected.insert(slot.id) }
             Button("Remove from this entry", systemImage: "trash", role: .destructive) { selected = [slot.id]; deleteChapters = true }
-        } label: { Image(systemName: "ellipsis").font(.system(size: 20)).frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Chapter actions").buttonStyle(.borderless)
+        }
     }
 
     @ViewBuilder private func chapterCard(_ slot: ChapterSlot, entry: PersonalEntry) -> some View {
@@ -213,37 +209,21 @@ struct LibraryEntryView: View {
                         chapterCardLabel(slot, variant: variant, chapter: chapter)
                     }.buttonStyle(.plain).accessibilityHint("Opens chapter")
                 }
-                HStack(spacing: 0) {
-                    if state.isRead(slot) { Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint).accessibilityLabel("Read") }
-                    Spacer(minLength: 0)
-                    chapterActions(slot, chapter: chapter, entry: entry)
-                }
-            }
+            }.contextMenu { chapterActions(slot, chapter: chapter, entry: entry) }
+                .accessibilityAction(named: "Select chapter") { selecting = true; selected.insert(slot.id) }
+                .accessibilityAction(named: "Rename chapter") { renamedSlot = slot }
+                .accessibilityAction(named: "Copy chapter") { copy([slot.id]) }
         }
     }
 
     private func chapterCardLabel(_ slot: ChapterSlot, variant: ChapterVariant, chapter: LibraryChapter) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if settings.snapshot.preferences.chapterThumbnails {
+        let source = settings.snapshot.connections.first { $0.id == chapter.identity.listing.connectionID }?.name ?? "Unavailable source"
+        return ChapterGridLabel(title: state.chapterDisplayTitle(variant),
+            subtitle: variant.edits.title == nil && state.number(variant) != nil ? state.chapterTitle(variant) : nil,
+            detail: source, style: settings.snapshot.preferences.resolvedChapterLayout.resolvedGridStyle,
+            showsCover: settings.snapshot.preferences.chapterThumbnails, selected: selecting ? selected.contains(slot.id) : nil) {
                 ChapterCoverView(identity: chapter.identity, extensions: extensions, overrideID: variant.edits.coverID)
-                    .aspectRatio(2.0 / 3, contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(alignment: .topTrailing) {
-                        if selecting {
-                            Image(systemName: selected.contains(slot.id) ? "checkmark.circle.fill" : "circle")
-                                .font(.title2).foregroundStyle(.white, .green).padding(4)
-                        }
-                    }
-            } else if selecting {
-                Image(systemName: selected.contains(slot.id) ? "checkmark.circle.fill" : "circle").foregroundStyle(.tint)
             }
-            Text(state.chapterDisplayTitle(variant)).font(.subheadline.weight(.semibold)).lineLimit(2)
-            if variant.edits.title == nil, state.number(variant) != nil { Text(state.chapterTitle(variant)).font(.caption).lineLimit(2) }
-            Text(settings.snapshot.connections.first { $0.id == chapter.identity.listing.connectionID }?.name ?? "Unavailable source")
-                .font(.caption2).foregroundStyle(MidokuTheme.secondaryText).lineLimit(1)
-            if let download = downloads.items.first(where: { $0.record.id == chapter.identity && $0.status != .cancelled }) {
-                Text(download.status.title).font(.caption2).foregroundStyle(.tint)
-            }
-        }.foregroundStyle(MidokuTheme.primaryText).contentShape(Rectangle())
     }
 
     private func rowLabel(_ slot: ChapterSlot, variant: ChapterVariant, chapter: LibraryChapter, entry: PersonalEntry) -> some View {

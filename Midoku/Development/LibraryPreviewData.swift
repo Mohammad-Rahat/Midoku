@@ -15,7 +15,7 @@ enum LibraryPreviewData {
             state.connections += [a, b]
             let category = LibraryCategory(name: "Reading"); state.categories.append(category)
             let details = MangaDetails(id: "preview-a", title: "The quiet adventure", description: "A reader-owned entry, with chapters collected from two sources. Local edits, chapter arrangements and reading progress belong to your library.", coverURL: nil, authors: ["Preview author"], status: "ongoing")
-            let chapters = [20, 22, 23, 24, 25].map { ChapterRecord(id: "a-\($0)", title: "Chapter \($0)", number: String($0), ordinal: $0, language: "en", groups: ["Source A release"]) }
+            let chapters = [20, 22, 23, 24, 25].map { ChapterRecord(id: "a-\($0)", title: $0 == 20 ? "A very long chapter title that should truncate on a single line" : "Chapter \($0)", number: String($0), ordinal: $0, language: "en", groups: ["Source A release"]) }
             let id = try state.library.add(details: details, connectionID: a.id, records: chapters, language: "en", categories: [category.id]); firstID = id
             _ = try state.library.remember(details: MangaDetails(id: "preview-b", title: details.title, description: "", coverURL: nil), connectionID: b.id, records: [ChapterRecord(id: "b-21", title: "A new beginning", number: "21", ordinal: 21, language: "en", groups: ["Source B release"])], complete: true)
             if let chapter = state.library.chapters.last {

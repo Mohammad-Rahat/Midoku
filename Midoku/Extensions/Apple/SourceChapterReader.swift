@@ -37,6 +37,10 @@ struct SourceChapterReader: View {
     private var identity: SourceChapterIdentity {
         SourceChapterIdentity(listing: SourceListingIdentity(connectionID: adapter.connection.id, externalID: mangaID), externalID: chapter.id)
     }
+    private var prefetchKey: String {
+        let current = pages.indices.contains(selectedPage) ? pages[selectedPage].id : ""
+        return "\(chapter.id)-\(retry)-\(selectedPage)-\(pages.count)-\(loadedPages.contains(current))-\(scenePhase == .active)"
+    }
     private var canvas: Color {
         switch preferences.background { case .black: .black; case .paper: Color(red: 0.98, green: 0.98, blue: 0.96); case .system: MidokuTheme.background }
     }
@@ -71,6 +75,21 @@ struct SourceChapterReader: View {
         }
         .onChange(of: selectedPage) { if preferences.mode != .continuous { positionFraction = 0; savePosition() } }
         .onDisappear { scrollSave?.cancel(); savePosition(); device.end() }
+        .task(id: prefetchKey) {
+            guard scenePhase == .active, pages.indices.contains(selectedPage),
+                  loadedPages.contains(pages[selectedPage].id) else { return }
+            let currentPages = pages
+            let index = selectedPage
+            do {
+                let current = try await extensions.adapter(for: adapter.connection, interaction: .background)
+                let images = extensions.images
+                await ReaderPrefetchWindow.load(currentPages, after: index) { page in
+                    _ = try await images.image(url: page.url, headers: page.headers,
+                        connection: current.connection, manifest: current.manifest, maximumDimension: 4096,
+                        interaction: .background, kind: .prefetch)
+                }
+            } catch { /* A failed preload is retried normally when its page becomes visible. */ }
+        }
         .task(id: reachedEnd) {
             guard reachedEnd else { return }
             do { try await Task.sleep(for: .seconds(1)); try Task.checkCancellation() } catch { return }
@@ -111,11 +130,12 @@ struct SourceChapterReader: View {
         VStack(spacing: 0) {
             if selectedPage == 0 { ReaderChapterBoundary(forward: false) }
             if pages.indices.contains(selectedPage) {
+                let page = pages[selectedPage]
                 GeometryReader { pageGeometry in
                 ReaderPageImage(index: selectedPage, viewport: pageGeometry.size, preferences: preferences, continuous: false,
-                    tap: tapped, loaded: { loadedPages.insert(pages[selectedPage].id); savePosition() }, imageLoader: { try await loadImage(pages[selectedPage]) },
+                    tap: tapped, loaded: { loadedPages.insert(page.id); savePosition() }, imageLoader: { try await loadImage(page) },
                     swipe: { delta in jump(to: selectedPage + delta) }, identity: identity)
-                    .id(pages[selectedPage].id)
+                    .id(page.id)
                 }
             }
             if selectedPage == pages.count - 1 { ReaderChapterBoundary(forward: true) }

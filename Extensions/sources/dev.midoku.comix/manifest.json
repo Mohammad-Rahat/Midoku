@@ -1,13 +1,14 @@
 {
   "id": "dev.midoku.comix",
   "name": "Comix",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "contractVersion": 2,
   "domains": [
     "comix.to",
     "comix.ws",
     "static.comix.to",
-    "*.wowpic2.store"
+    "*.wowpic2.store",
+    "*.wowpic1.store"
   ],
   "capabilities": [
     "search",

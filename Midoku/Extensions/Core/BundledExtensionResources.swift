@@ -23,18 +23,18 @@ var MidokuExtension = (() => {
   };
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-  // midoku:/workspace/scratch/e7e7937cc129/midoku-work/Extensions/sources/dev.midoku.mangadex/index.ts
+  // midoku:/workspace/scratch/5c7c758474ee/Midoku/Extensions/sources/dev.midoku.mangadex/index.ts
   var index_exports = {};
   __export(index_exports, {
     default: () => index_default
   });
 
-  // midoku:/workspace/scratch/e7e7937cc129/midoku-work/Extensions/sdk/index.ts
+  // midoku:/workspace/scratch/5c7c758474ee/Midoku/Extensions/sdk/index.ts
   function defineExtension(extension) {
     return Object.freeze(extension);
   }
 
-  // midoku:/workspace/scratch/e7e7937cc129/midoku-work/Extensions/sources/dev.midoku.mangadex/filters.ts
+  // midoku:/workspace/scratch/5c7c758474ee/Midoku/Extensions/sources/dev.midoku.mangadex/filters.ts
   var options = (values) => values.map(([id, title]) => ({ id, title }));
   var languages = options([
     ["en", "English"],
@@ -150,7 +150,7 @@ var MidokuExtension = (() => {
     return result;
   }
 
-  // midoku:/workspace/scratch/e7e7937cc129/midoku-work/Extensions/sources/dev.midoku.mangadex/index.ts
+  // midoku:/workspace/scratch/5c7c758474ee/Midoku/Extensions/sources/dev.midoku.mangadex/index.ts
   var api = "https://api.mangadex.org";
   var referer = "https://mangadex.org/";
   var pageSize = 20;
@@ -412,7 +412,7 @@ var MidokuExtension = (() => {
 
 """#),
         (manifestJSON: #"""
-{"id":"dev.midoku.comix","name":"Comix","version":"0.1.0","contractVersion":2,"domains":["comix.to","comix.ws","static.comix.to","*.wowpic2.store"],"capabilities":["search","feeds","details","chapters","pages","filters"],"browserRendering":true,"imageProcessing":"comix-v1"}
+{"id":"dev.midoku.comix","name":"Comix","version":"0.1.1","contractVersion":2,"domains":["comix.to","comix.ws","static.comix.to","*.wowpic2.store","*.wowpic1.store"],"capabilities":["search","feeds","details","chapters","pages","filters"],"browserRendering":true,"imageProcessing":"comix-v1"}
 """#, javaScript: #"""
 var MidokuExtension = (() => {
   var __defProp = Object.defineProperty;
@@ -433,18 +433,18 @@ var MidokuExtension = (() => {
   };
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-  // midoku:/workspace/scratch/e7e7937cc129/midoku-work/Extensions/sources/dev.midoku.comix/index.ts
+  // midoku:/workspace/scratch/5c7c758474ee/Midoku/Extensions/sources/dev.midoku.comix/index.ts
   var index_exports = {};
   __export(index_exports, {
     default: () => index_default
   });
 
-  // midoku:/workspace/scratch/e7e7937cc129/midoku-work/Extensions/sdk/index.ts
+  // midoku:/workspace/scratch/5c7c758474ee/Midoku/Extensions/sdk/index.ts
   function defineExtension(extension) {
     return Object.freeze(extension);
   }
 
-  // midoku:/workspace/scratch/e7e7937cc129/midoku-work/Extensions/sources/dev.midoku.comix/index.ts
+  // midoku:/workspace/scratch/5c7c758474ee/Midoku/Extensions/sources/dev.midoku.comix/index.ts
   var base = "https://comix.to";
   function id(value, chapter = false) {
     if (typeof value !== "string" || !(chapter ? /^[1-9][0-9]{0,14}$/ : /^[a-zA-Z0-9]{1,40}$/).test(value)) throw Error("Invalid Comix identity");

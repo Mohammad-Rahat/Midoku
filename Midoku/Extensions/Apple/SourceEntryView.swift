@@ -217,15 +217,14 @@ struct SourceEntryView: View {
         if !selected.insert(chapter.id).inserted { selected.remove(chapter.id) }
     }
     private func chapterActions(_ chapter: ChapterRecord) -> some View {
-        Menu {
+        Group {
             Button("Copy chapter", systemImage: "doc.on.doc") { copy([chapter]) }
             Button(settings.snapshot.library.completed.contains(chapterIdentity(chapter)) ? "Mark unread" : "Mark read", systemImage: "checkmark.circle") { mark(chapter) }
             Button("Select", systemImage: "checkmark.circle") { selecting = true; selected.insert(chapter.id) }
             Button("Download chapter", systemImage: "arrow.down.circle") { download(chapter) }
                 .disabled(!adapter.manifest.capabilities.contains(.pages) || !downloads.isReady || downloadStatus(chapter) != nil)
             NavigationLink("Manage downloads") { DownloadsListView() }
-        } label: { Image(systemName: "ellipsis").font(.system(size: 20)).frame(minWidth: 44, minHeight: 44) }
-            .buttonStyle(.borderless).accessibilityLabel("Chapter actions")
+        }
     }
     private func chapterRow(_ chapter: ChapterRecord) -> some View {
         HStack(spacing: 8) {
@@ -246,8 +245,7 @@ struct SourceEntryView: View {
                     }
                 }
             }.disabled(!adapter.manifest.capabilities.contains(.pages))
-            chapterActions(chapter)
-        }
+        }.contextMenu { chapterActions(chapter) }
     }
     private func chapterCard(_ chapter: ChapterRecord) -> some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -257,29 +255,18 @@ struct SourceEntryView: View {
                 Button { readingChapter = chapter } label: { chapterCardLabel(chapter) }
                     .buttonStyle(.plain).disabled(!adapter.manifest.capabilities.contains(.pages)).accessibilityHint("Opens chapter")
             }
-            HStack(spacing: 0) {
-                if settings.snapshot.library.completed.contains(chapterIdentity(chapter)) {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint).accessibilityLabel("Read")
-                }
-                Spacer(minLength: 0)
-                chapterActions(chapter)
-            }
-        }
+        }.contextMenu { chapterActions(chapter) }
+            .accessibilityAction(named: "Select chapter") { selecting = true; selected.insert(chapter.id) }
+            .accessibilityAction(named: "Copy chapter") { copy([chapter]) }
     }
     private func chapterCardLabel(_ chapter: ChapterRecord) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if settings.snapshot.preferences.chapterThumbnails {
+        ChapterGridLabel(title: chapter.number.map { "Chapter \($0)" } ?? chapter.title,
+            subtitle: chapter.number != nil ? chapter.title : nil,
+            detail: ([adapter.connection.name] + (chapter.groups ?? [])).joined(separator: " · "),
+            style: settings.snapshot.preferences.resolvedChapterLayout.resolvedGridStyle,
+            showsCover: settings.snapshot.preferences.chapterThumbnails, selected: selecting ? selected.contains(chapter.id) : nil) {
                 ChapterCoverView(identity: chapterIdentity(chapter), extensions: extensions)
-                    .aspectRatio(2.0 / 3, contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(alignment: .topTrailing) {
-                        if selecting { Image(systemName: selected.contains(chapter.id) ? "checkmark.circle.fill" : "circle").font(.title2).foregroundStyle(.white, .green).padding(4) }
-                    }
-            } else if selecting { Image(systemName: selected.contains(chapter.id) ? "checkmark.circle.fill" : "circle").foregroundStyle(.tint) }
-            Text(chapter.number.map { "Chapter \($0)" } ?? chapter.title).font(.subheadline.weight(.semibold)).lineLimit(2)
-            if chapter.number != nil { Text(chapter.title).font(.caption).lineLimit(2) }
-            if let groups = chapter.groups, !groups.isEmpty { Text(groups.joined(separator: " · ")).font(.caption2).foregroundStyle(MidokuTheme.secondaryText).lineLimit(2) }
-            if let status = downloadStatus(chapter) { Text(status.title).font(.caption2).foregroundStyle(.tint) }
-        }.foregroundStyle(MidokuTheme.primaryText).contentShape(Rectangle())
+            }
     }
 
     private func addToLibrary() {
@@ -376,4 +363,3 @@ private struct SourceChapterRow: View {
         .padding(.vertical, 4)
     }
 }
-

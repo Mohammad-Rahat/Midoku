@@ -95,7 +95,7 @@ jobs:
           xcrun simctl uninstall "$device_id" "$bundle_id" || true
           xcrun simctl install "$device_id" "$app"
           mkdir -p build/screenshots
-          for screen in home library browse history entry chapters chapter-grid source-grid settings settings-bottom layout chapter-settings rename search reader fullscreen empty-clipboard; do
+          for screen in home library browse history entry chapters chapter-grid chapter-compact chapter-thumbnail source-grid settings settings-bottom layout chapter-settings rename search reader fullscreen empty-clipboard; do
             xcrun simctl terminate "$device_id" "$bundle_id" || true
             xcrun simctl launch "$device_id" "$bundle_id" --library-preview "--$screen-preview"
             sleep 4

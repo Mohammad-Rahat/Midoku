@@ -4,7 +4,10 @@ protocol SourceHTTPTransport: Sendable {
     func send(_ request: URLRequest, maximumBytes: Int) async throws -> SourceHTTPResponse
 }
 
-nonisolated enum SourceRequestKind: Sendable { case metadata, image, download }
+nonisolated enum SourceRequestKind: Int, Sendable, Hashable {
+    case metadata, image, prefetch, backgroundMetadata, thumbnail, download
+    var isMetadata: Bool { self == .metadata || self == .backgroundMetadata }
+}
 
 actor SourceRequestCoordinator {
     private let transport: any SourceHTTPTransport
@@ -12,8 +15,7 @@ actor SourceRequestCoordinator {
     private let verification: any ChallengeResolving
     private let browser: (any SourceBrowserRendering)?
     private let minimumSpacing: Duration
-    private var waitingMetadata: [UUID: Int] = [:]
-    private var waitingImages: [UUID: Int] = [:]
+    private var waiting: [UUID: [SourceRequestKind: Int]] = [:]
     private var activeConnections = Set<UUID>()
     private var nextRequest: [UUID: ContinuousClock.Instant] = [:]
 
@@ -46,27 +48,23 @@ actor SourceRequestCoordinator {
         try policy.validate(input.url)
         try policy.validate(headers: input.headers)
         if let script = input.browserScript {
-            guard kind == .metadata, manifest.browserRendering == true, browser != nil,
+            guard kind.isMetadata, manifest.browserRendering == true, browser != nil,
                   !script.isEmpty, script.utf8.count <= 32_768 else { throw ExtensionFailure.requestNotAllowed }
         }
 
         // One request/verification flow per connection. Other sources remain independent.
-        if kind == .metadata { waitingMetadata[connection.id, default: 0] += 1 }
-        if kind == .image { waitingImages[connection.id, default: 0] += 1 }
+        waiting[connection.id, default: [:]][kind, default: 0] += 1
         do {
             while activeConnections.contains(connection.id) ||
-                (kind != .metadata && waitingMetadata[connection.id, default: 0] > 0) ||
-                (kind == .download && waitingImages[connection.id, default: 0] > 0) {
+                waiting[connection.id, default: [:]].contains(where: { $0.key.rawValue < kind.rawValue && $0.value > 0 }) {
                 try await Task.sleep(for: .milliseconds(20))
             }
             try Task.checkCancellation()
         } catch {
-            if kind == .metadata { waitingMetadata[connection.id, default: 0] -= 1 }
-            if kind == .image { waitingImages[connection.id, default: 0] -= 1 }
+            waiting[connection.id]?[kind, default: 0] -= 1
             throw error
         }
-        if kind == .metadata { waitingMetadata[connection.id, default: 0] -= 1 }
-        if kind == .image { waitingImages[connection.id, default: 0] -= 1 }
+        waiting[connection.id]?[kind, default: 0] -= 1
         activeConnections.insert(connection.id)
         defer { activeConnections.remove(connection.id) }
 
@@ -92,13 +90,13 @@ actor SourceRequestCoordinator {
             for (key, value) in try await sessions.headers(for: currentURL, connectionID: connection.id) {
                 request.setValue(value, forHTTPHeaderField: key)
             }
-            if manifest.imageProcessing == "comix-v1", kind != .metadata,
+            if manifest.imageProcessing == "comix-v1", !kind.isMetadata,
                URLComponents(url: currentURL, resolvingAgainstBaseURL: false)?.queryItems?.contains(where: { $0.name == "v3" }) != true,
                let referer = input.headers.first(where: { $0.key.lowercased() == "referer" })?.value,
                let origin = URL(string: referer), let host = origin.host {
                 request.setValue("https://" + host, forHTTPHeaderField: "Origin")
             }
-            let response = try await transport.send(request, maximumBytes: (kind == .metadata ? 8 : 32) * 1024 * 1024)
+            let response = try await transport.send(request, maximumBytes: (kind.isMetadata ? 8 : 32) * 1024 * 1024)
             try Task.checkCancellation()
             try policy.validate(response.url)
             guard response.url == currentURL else {
@@ -123,7 +121,7 @@ actor SourceRequestCoordinator {
                 currentURL = redirected
                 continue
             }
-            if response.status == 404, kind != .metadata, manifest.imageProcessing == "comix-v1" {
+            if response.status == 404, !kind.isMetadata, manifest.imageProcessing == "comix-v1" {
                 let prefixes = ["i5", "si", "i", "sii", "ii"]
                 let segments = currentURL.path.split(separator: "/").map(String.init)
                 if let first = segments.first, prefixes.contains(first), segments.count > 1,
@@ -175,7 +173,8 @@ nonisolated struct NetworkExtensionHost: ExtensionHost {
     let interaction: VerificationInteraction
 
     func request(_ input: SourceHTTPRequest) async throws -> SourceHTTPResponse {
-        try await coordinator.request(input, connection: connection, manifest: manifest, interaction: interaction)
+        try await coordinator.request(input, connection: connection, manifest: manifest, interaction: interaction,
+                                      kind: interaction == .background ? .backgroundMetadata : .metadata)
     }
 }
 
