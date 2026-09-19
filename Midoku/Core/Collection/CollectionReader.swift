@@ -64,7 +64,7 @@ extension ReaderViewController {
         let store = MCCollectionStore.shared
         let route = collectionSequence?.route(key: chapterKey)
         let identity = route?.identifier ?? ChapterIdentifier(sourceKey: manga.sourceKey, mangaKey: manga.key, chapterKey: chapterKey)
-        let target = store.coverTarget(identifier: identity, entryID: collectionSequence?.entryID,
+        let target = collectionSequence != nil && route == nil ? nil : store.coverTarget(identifier: identity, entryID: collectionSequence?.entryID,
                                       variantID: collectionSequence == nil ? nil : UUID(uuidString: chapterKey))
         // Freeze the pressed page's target. Infinite scrolling may already be displaying another chapter.
         return [false, true].map { forEntry in

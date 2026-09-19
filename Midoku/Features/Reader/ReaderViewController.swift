@@ -988,10 +988,10 @@ extension ReaderViewController: @MainActor ReaderHoldingDelegate {
     }
 
     func getNextChapter() -> AidokuRunner.Chapter? {
-        nextChapter(markingDuplicates: true)
+        resolveNextChapter(markingDuplicates: true)
     }
 
-    private func nextChapter(markingDuplicates: Bool) -> AidokuRunner.Chapter? {
+    private func resolveNextChapter(markingDuplicates: Bool) -> AidokuRunner.Chapter? {
         if let collectionSequence { return collectionSequence.adjacent(to: chapter, offset: 1) }
         guard
             var index = chapterList.firstIndex(of: chapter)
@@ -1033,10 +1033,10 @@ extension ReaderViewController: @MainActor ReaderHoldingDelegate {
     }
 
     func getPreviousChapter() -> AidokuRunner.Chapter? {
-        previousChapter(markingDuplicates: true)
+        resolvePreviousChapter(markingDuplicates: true)
     }
 
-    private func previousChapter(markingDuplicates: Bool) -> AidokuRunner.Chapter? {
+    private func resolvePreviousChapter(markingDuplicates: Bool) -> AidokuRunner.Chapter? {
         if let collectionSequence { return collectionSequence.adjacent(to: chapter, offset: -1) }
         guard
             var index = chapterList.firstIndex(of: chapter)
@@ -1092,8 +1092,8 @@ extension ReaderViewController: @MainActor ReaderHoldingDelegate {
     }
 
     private func updateChapterButtons() {
-        toolbarView.previousChapterButton.isEnabled = previousChapter(markingDuplicates: false) != nil
-        toolbarView.nextChapterButton.isEnabled = nextChapter(markingDuplicates: false) != nil
+        toolbarView.previousChapterButton.isEnabled = resolvePreviousChapter(markingDuplicates: false) != nil
+        toolbarView.nextChapterButton.isEnabled = resolveNextChapter(markingDuplicates: false) != nil
     }
 
     func setCurrentPage(_ page: Int, position: Double? = nil) {

@@ -186,7 +186,8 @@ struct MCCollectionRootView: View {
                                 if selecting {
                                     Image(systemName: selected.contains(entry.id) ? "checkmark.circle.fill" : "circle")
                                         .font(.title2).symbolRenderingMode(.palette)
-                                        .foregroundStyle(.white, Color.accentColor).padding(8)
+                                        .foregroundStyle(.white, Color.accentColor)
+                                        .background(Circle().fill(Color.accentColor)).padding(8)
                                 }
                             }
                         }.buttonStyle(.plain)

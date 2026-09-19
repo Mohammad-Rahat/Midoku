@@ -70,7 +70,7 @@ private struct MCChapterDraftFields: View {
     @State private var store = MCCollectionStore.shared
     private var variant: MCChapterVariant { MCChapterVariant(chapterID: chapter.id, edits: edits) }
     var body: some View {
-        LabeledContent("Title") { TextField("Title", text: Binding(get: { store.library.chapterDisplayTitle(variant) }, set: { edits.title = $0 })).multilineTextAlignment(.trailing) }
+        LabeledContent("Title") { TextField("Title", text: Binding(get: { edits.title ?? store.library.chapterDisplayTitle(variant) }, set: { edits.title = $0 })).multilineTextAlignment(.trailing) }
         LabeledContent("Number") { TextField("Number", text: Binding(get: { edits.number ?? chapter.record.number ?? "" }, set: { edits.number = $0 })).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
         LabeledContent("Volume") { TextField("Volume", text: Binding(get: { edits.volume ?? chapter.record.volume ?? "" }, set: { edits.volume = $0 })).multilineTextAlignment(.trailing) }
         PhotosPicker("Choose thumbnail", selection: $photo, matching: .images)
