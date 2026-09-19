@@ -22,6 +22,7 @@ struct SourceBrowserView: View {
         .background(MidokuTheme.background)
         .navigationTitle(connection.name)
         .navigationBarTitleDisplayMode(.inline)
+        .modifier(SolidNavigationBar())
         .task(id: retry) {
             do {
                 adapter = try await extensions.adapter(for: connection)
@@ -80,11 +81,13 @@ private struct SourceBrowserContent: View {
 
     private var request: BrowseRequest? {
         guard let selectedTab else { return nil }
-        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = submittedQuery ?? ""
         let feedID: String?
         switch selectedTab {
         case .feed(let id): feedID = id
-        case .search: feedID = nil
+        case .search:
+            guard submittedQuery != nil else { return nil }
+            feedID = nil
         }
         let scope: SourceSearchFilter.Scope = feedID == nil ? .search : .feed
         let scopedFilters: SourceFilterValues
@@ -157,12 +160,10 @@ private struct SourceBrowserContent: View {
                 revision += 1
             }
         }
-        .onChange(of: query) {
-            submittedQuery = nil
-            if adapter.manifest.capabilities.contains(.search) { selectedTab = .search }
-        }
         .onSubmit {
             submittedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+            selectedTab = .search
+            revision += 1
             searchFocused = false
         }
         .alert("Home section", isPresented: Binding(get: { pinMessage != nil }, set: { if !$0 { pinMessage = nil } })) {
@@ -170,13 +171,13 @@ private struct SourceBrowserContent: View {
             Button("Done", role: .cancel) { }
         } message: { Text(pinMessage ?? "") }
         .sheet(isPresented: $showHomeSections) {
-            NavigationStack { HomeSectionsSettingsView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { showHomeSections = false } } } }
+            NavigationStack { HomeSectionsSettingsView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { showHomeSections = false } }.sharedBackgroundVisibility(.hidden) } }
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { if let selectedTab { pin(selectedTab) } } label: { Label("Pin to Home", systemImage: "pin") }
                     .disabled(selectedTab == nil)
-            }
+            }.sharedBackgroundVisibility(.hidden)
             if adapter.manifest.capabilities.contains(.filters) {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -185,7 +186,7 @@ private struct SourceBrowserContent: View {
                         Label((request?.filters.isEmpty ?? true) ? "Filters" : "Filters (\(request?.filters.count ?? 0))",
                               systemImage: (request?.filters.isEmpty ?? true) ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill")
                     }
-                }
+                }.sharedBackgroundVisibility(.hidden)
             }
         }
         .sheet(isPresented: $showingFilters) {
@@ -229,11 +230,6 @@ private struct SourceBrowserContent: View {
             if let loadedRequest, request.hasSameResults(as: loadedRequest), !results.isStale {
                 self.loadedRequest = request
                 return
-            }
-            // The existing grid stays mounted during typing. Only the newest paused query runs.
-            if request.feedID == nil, !request.query.isEmpty, !request.submitted {
-                do { try await Task.sleep(for: .milliseconds(300)) }
-                catch { return }
             }
             guard !Task.isCancelled else { return }
             await load(request)
@@ -309,7 +305,7 @@ private struct SourceBrowserContent: View {
         let title: String
         switch selection {
         case .feed(let id): feedID = id; title = feeds.first { $0.id == id }?.title ?? "Saved feed"
-        case .search: feedID = nil; title = query.isEmpty ? "Search" : query
+        case .search: feedID = nil; title = (submittedQuery ?? "").isEmpty ? "Search" : (submittedQuery ?? "Search")
         }
         let scope: SourceSearchFilter.Scope = feedID == nil ? .search : .feed
         let scoped = filterDefinitions.map { definitions in
@@ -317,7 +313,7 @@ private struct SourceBrowserContent: View {
             return filters.filter { ids.contains($0.key) }
         } ?? filters
         let section = HomeSection(connectionID: adapter.connection.id, feedID: feedID,
-            query: feedID == nil ? query.trimmingCharacters(in: .whitespacesAndNewlines) : "",
+            query: feedID == nil ? (submittedQuery ?? "") : "",
             filters: scoped, sourceTitle: adapter.connection.name, title: String(title.prefix(100)))
         pinMessage = settings.pin(section) ? "Pinned to Home with your current filters." : "This feed and these filters are already pinned. Open Manage sections to show, rename, or move the existing section."
     }
@@ -332,7 +328,7 @@ private struct SourceBrowserContent: View {
     }
 }
 
-private struct MangaResultsGrid: View {
+struct MangaResultsGrid: View {
     let items: [MangaSummary]
     let adapter: any SourceAdapter
     let extensions: ExtensionEnvironment

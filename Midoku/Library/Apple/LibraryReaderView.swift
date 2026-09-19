@@ -38,20 +38,6 @@ struct LibraryReaderView: View {
                 } else { ProgressView("Opening chapter") }
             } else { ContentUnavailableView("Chapter removed", systemImage: "book.closed", description: Text("Return to the entry to choose another chapter. Your saved progress is kept.")) }
         }
-        .safeAreaInset(edge: .bottom) {
-            if controlsVisible || voiceOver, let entry, let index = entry.slots.firstIndex(where: { $0.id == slotID }) {
-                HStack(spacing: 12) {
-                    Button { go(entry.slots[index - 1].id) } label: { Label("Previous chapter", systemImage: "backward.end") }.disabled(index == 0)
-                    Spacer(minLength: 0)
-                    VStack(spacing: 2) {
-                        Text("\(index + 1) of \(entry.slots.count)").font(.caption).monospacedDigit()
-                        if index + 1 == entry.slots.count { Text("Last chapter").font(.caption2).foregroundStyle(MidokuTheme.secondaryText) }
-                    }
-                    Spacer(minLength: 0)
-                    Button { go(entry.slots[index + 1].id) } label: { Label("Next chapter", systemImage: "forward.end") }.disabled(index + 1 == entry.slots.count)
-                }.labelStyle(.iconOnly).frame(minHeight: 44).padding(.horizontal, 20).background(MidokuTheme.surface)
-            }
-        }
         .preference(key: AppTabBarHiddenPreference.self, value: true)
         .environment(\.readerChapterNavigation, chapterNavigation)
         .environment(\.readerCoverContext, ReaderCoverContext(entryID: entryID, slotID: slotID))

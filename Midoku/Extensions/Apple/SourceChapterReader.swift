@@ -9,6 +9,7 @@ struct SourceChapterReader: View {
     let extensions: ExtensionEnvironment
     var entryID: UUID? = nil
     var slotID: UUID? = nil
+    var coverURL: URL? = nil
     @Environment(\.readerChapterNavigation) private var chapterNavigation
     @Environment(AppSettingsStore.self) private var settings
     @Environment(\.scenePhase) private var scenePhase
@@ -41,51 +42,25 @@ struct SourceChapterReader: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            if controlsVisible || voiceOver {
-                VStack(spacing: 4) {
-                    Text(mangaTitle).font(.subheadline).lineLimit(2)
-                    Text(([adapter.connection.name] + (chapter.groups ?? [])).formatted(.list(type: .and)))
-                        .font(.caption).foregroundStyle(MidokuTheme.secondaryText).lineLimit(2)
-                }.padding(8).frame(maxWidth: .infinity).background(MidokuTheme.surface)
-            }
-            if let errorMessage {
-                SourceErrorView(message: errorMessage) { retry += 1 }.frame(maxHeight: .infinity)
-            } else if !pages.isEmpty {
-                GeometryReader { geometry in
-                    if preferences.mode == .continuous {
-                        continuousPages(viewport: geometry.size)
-                    } else {
-                        pagedPages(viewport: geometry.size)
-                    }
+        ReaderChrome(title: chapterNavigation.title ?? chapter.number.map { "Chapter \($0)" } ?? chapter.title,
+            subtitle: mangaTitle + " · " + adapter.connection.name,
+            visible: controlsVisible || voiceOver, preferences: { showingPreferences = true }, pages: { viewport in
+                Group {
+                    if let errorMessage { SourceErrorView(message: errorMessage) { retry += 1 } }
+                    else if !pages.isEmpty {
+                        if preferences.mode == .continuous { continuousPages(viewport: viewport) }
+                        else { pagedPages(viewport: viewport) }
+                    } else { ProgressView("Loading chapter").frame(maxWidth: .infinity, maxHeight: .infinity) }
+                }.background(canvas)
+            }, controls: {
+                VStack(spacing: 0) {
+                    if let message = device.orientationMessage { Text(message).font(.caption).padding(8) }
+                    if !pages.isEmpty { pageControls }
                 }
-                .background(canvas)
-            } else {
-                ProgressView("Loading chapter").frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            if controlsVisible || voiceOver {
-                if let message = device.orientationMessage {
-                    Text(message).font(.caption).padding(8).foregroundStyle(MidokuTheme.secondaryText)
-                }
-                if !pages.isEmpty { pageControls }
-            }
-        }
-        .background(MidokuTheme.surface)
-        .navigationTitle(chapterNavigation.title ?? chapter.number.map { "Chapter \($0)" } ?? chapter.title)
-        .preference(key: ReaderControlsPreference.self, value: controlsVisible || voiceOver)
-        .statusBarHidden(!controlsVisible && !voiceOver)
-        .modifier(ReaderBackGesture())
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .tabBar)
-        .toolbar(controlsVisible || voiceOver ? .visible : .hidden, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { showingPreferences = true } label: { Label("Reader preferences", systemImage: "slider.horizontal.3") }
-            }
-        }
+            })
         .sheet(isPresented: $showingPreferences) {
             NavigationStack {
-                readerSettings.toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingPreferences = false } } }
+                readerSettings.toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingPreferences = false } }.sharedBackgroundVisibility(.hidden) }
             }
         }
         .onAppear { restoreGeneration = settings.restoreGeneration; device.begin(preferences) }
@@ -105,7 +80,7 @@ struct SourceChapterReader: View {
         .task(id: retry) {
             if !opened {
                 settings.update { $0.opened(ReadingRecord(identity: identity, mangaTitle: mangaTitle,
-                    sourceName: adapter.connection.name, chapter: chapter, openedAt: Date(), entryID: entryID, slotID: slotID)) }
+                    sourceName: adapter.connection.name, chapter: chapter, openedAt: Date(), entryID: entryID, slotID: slotID, coverURL: coverURL)) }
                 opened = true
             }
             errorMessage = nil
@@ -202,20 +177,7 @@ struct SourceChapterReader: View {
 
     @State private var jumpRevision = 0
     private var pageControls: some View {
-        HStack(spacing: 16) {
-            Button { jump(to: selectedPage - 1) } label: { Label("Previous page", systemImage: "chevron.left") }
-                .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44).disabled(selectedPage == 0)
-            Spacer()
-            Menu {
-                Picker("Page", selection: Binding(get: { selectedPage }, set: { jump(to: $0) })) {
-                    ForEach(pages.indices, id: \.self) { index in Text("Page \(index + 1)").tag(index) }
-                }
-            } label: { Text("\(selectedPage + 1) / \(pages.count)").monospacedDigit().frame(minHeight: 44) }
-                .accessibilityLabel("Page \(selectedPage + 1) of \(pages.count). Choose page")
-            Spacer()
-            Button { jump(to: selectedPage + 1) } label: { Label("Next page", systemImage: "chevron.right") }
-                .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44).disabled(selectedPage + 1 >= pages.count)
-        }.padding(.horizontal, 20).background(MidokuTheme.surface)
+        ReaderPageControls(index: selectedPage, count: pages.count, jump: { jump(to: $0) })
     }
     private func tapped(_ fraction: Double) {
         let action = preferences.tapNavigation ? preferences.tapZones.action(at: fraction, mode: preferences.mode) : 0
@@ -300,7 +262,7 @@ struct ReaderPageImage: View {
                             Button("Zoom out") { zoom = max(1, zoom - 0.5); gestureZoom = zoom }
                             Button("Reset zoom") { zoom = 1; gestureZoom = 1 }
                         } label: {
-                            Image(systemName: "plus.magnifyingglass").frame(width: 44, height: 44).background(.regularMaterial, in: Circle())
+                            Image(systemName: "plus.magnifyingglass").frame(width: 44, height: 44).background(MidokuTheme.surface, in: Circle())
                         }.accessibilityLabel("Page zoom").padding(8)
                     }
                     .scrollDisabled(zoom == 1 && preferences.fit == .screen)
@@ -322,7 +284,7 @@ struct ReaderPageImage: View {
                                     continuous: false, tap: { _ in }, loaded: {}, imageLoader: imageLoader, identity: identity)
                 }
                 .navigationTitle("Page \(index + 1)")
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { zoomSheet = false } } }
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { zoomSheet = false } }.sharedBackgroundVisibility(.hidden) }
             }
         }
         .task(id: retry) {

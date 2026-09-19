@@ -38,6 +38,18 @@ final class LibraryCoordinator {
         return id
     }
 
+    /// Save the already-visible listing immediately. A full refresh fills remaining chapters;
+    /// partial pages must never mark previously remembered releases as unavailable.
+    func addVisible(details: MangaDetails, connection: SourceConnection, records: [ChapterRecord], language: String?) async throws -> UUID {
+        var entryID: UUID?
+        try await settings.commit { state in
+            entryID = try state.library.add(details: details, connectionID: connection.id, records: records,
+                language: language, complete: false)
+        }
+        guard let entryID else { throw LibraryFailure.missing }
+        return entryID
+    }
+
     func copy(details: MangaDetails, connection: SourceConnection, chapters: [ChapterRecord]) async throws {
         try await settings.commit { state in
             _ = try state.library.remember(details: details, connectionID: connection.id, records: chapters, complete: false)

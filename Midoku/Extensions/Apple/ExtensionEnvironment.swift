@@ -111,7 +111,7 @@ final class ExtensionEnvironment {
                 state.connections[index].isArchived = true
             }
         }
-        await images.clear()
+        try? await images.clear()
     }
 
     func restoreConnection(_ connection: SourceConnection) {

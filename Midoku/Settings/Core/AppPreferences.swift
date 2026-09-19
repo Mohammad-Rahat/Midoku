@@ -140,6 +140,7 @@ nonisolated struct ReadingRecord: Codable, Identifiable, Sendable {
     var openedAt: Date
     var entryID: UUID? = nil
     var slotID: UUID? = nil
+    var coverURL: URL? = nil
 }
 nonisolated struct ReadingPosition: Codable, Identifiable, Sendable {
     var id: SourceChapterIdentity { identity }

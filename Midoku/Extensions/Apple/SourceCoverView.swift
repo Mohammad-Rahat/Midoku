@@ -23,7 +23,6 @@ struct SourceCoverView: View {
         }
         .accessibilityHidden(true)
         .task(id: url) {
-            image = nil
             guard let url else { return }
             do {
                 _ = try await extensions.adapter(for: adapter.connection)

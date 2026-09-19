@@ -58,7 +58,7 @@ struct SourceFilterSheet: View {
             .navigationTitle("Filters")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }.sharedBackgroundVisibility(.hidden)
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Apply") {
                         for filter in definitions where Set(draft[filter.id] ?? filter.defaults) == Set(filter.defaults) {
@@ -68,7 +68,7 @@ struct SourceFilterSheet: View {
                         dismiss()
                     }
                     .disabled(!canApply)
-                }
+                }.sharedBackgroundVisibility(.hidden)
             }
             .task(id: retry) {
                 isLoading = true

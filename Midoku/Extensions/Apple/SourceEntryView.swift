@@ -39,7 +39,13 @@ struct SourceEntryView: View {
     }
     private func download(_ chapter: ChapterRecord) {
         Task { await downloads.enqueue(ReadingRecord(identity: chapterIdentity(chapter), mangaTitle: details?.title ?? summary.title,
-            sourceName: adapter.connection.name, chapter: chapter, openedAt: Date())) }
+            sourceName: adapter.connection.name, chapter: chapter, openedAt: Date(), coverURL: details?.coverURL ?? summary.coverURL)) }
+    }
+
+    private var existingEntries: [PersonalEntry] {
+        let identity = SourceListingIdentity(connectionID: adapter.connection.id, externalID: summary.id)
+        guard let listing = settings.snapshot.library.listings.first(where: { $0.identity == identity }) else { return [] }
+        return settings.snapshot.library.entries.filter { $0.links.contains { $0.listingID == listing.id } }
     }
 
     var body: some View {
@@ -57,13 +63,10 @@ struct SourceEntryView: View {
             }
             if let details {
                 Section {
-                    let identity = SourceListingIdentity(connectionID: adapter.connection.id, externalID: summary.id)
-                    let listingID = settings.snapshot.library.listings.first { $0.identity == identity }?.id
-                    let existing = settings.snapshot.library.entries.filter { entry in entry.links.contains { $0.listingID == listingID } }
-                    if existing.isEmpty {
-                        Button("Add to library", systemImage: "plus") { adding = true }.buttonStyle(.borderedProminent)
-                    } else {
-                        ForEach(existing) { entry in NavigationLink { LibraryEntryView(entryID: entry.id, extensions: extensions) } label: { Label("Open \(settings.snapshot.library.title(entry))", systemImage: "books.vertical") } }
+                    ForEach(existingEntries) { entry in
+                        NavigationLink { LibraryEntryView(entryID: entry.id, extensions: extensions) } label: {
+                            Label("Open \(settings.snapshot.library.title(entry))", systemImage: "books.vertical")
+                        }
                     }
                     if let actionMessage { Text(actionMessage).font(.caption).foregroundStyle(MidokuTheme.secondaryText) }
                 }.listRowBackground(MidokuTheme.surface)
@@ -89,13 +92,17 @@ struct SourceEntryView: View {
             }
             if adapter.manifest.capabilities.contains(.chapters) {
                 Section {
-                    if let languages = details?.availableLanguages, languages.count > 1,
-                       adapter.manifest.contractVersion >= 2 {
-                        Picker("Chapter language", selection: $chapterLanguage) {
-                            ForEach(languages) { language in
-                                Text(language.title).tag(language.id)
-                            }
-                        }
+                    HStack(spacing: 12) {
+                        if let languages = details?.availableLanguages, languages.count > 1, adapter.manifest.contractVersion >= 2 {
+                            Picker("Language", selection: $chapterLanguage) {
+                                ForEach(languages) { language in Text(language.title).tag(language.id) }
+                            }.labelsHidden().accessibilityLabel("Chapter language")
+                        } else { Text(chapterLanguage.isEmpty ? "Chapters" : chapterLanguage.uppercased()).font(.subheadline) }
+                        Spacer(minLength: 0)
+                        Button(selecting ? "Done" : "Select") { selecting.toggle(); selected.removeAll() }.buttonStyle(.borderless)
+                        NavigationLink { ClipboardView() } label: {
+                            Label("Chapter clipboard", systemImage: "doc.on.clipboard").labelStyle(.iconOnly).frame(width: 44, height: 44)
+                        }.buttonStyle(.plain)
                     }
                     if chapters.isLoading { ProgressView("Loading chapters") }
                     if let error = chapters.errorMessage {
@@ -113,7 +120,7 @@ struct SourceEntryView: View {
                                 if selecting { Button { if !selected.insert(chapter.id).inserted { selected.remove(chapter.id) } } label: { Image(systemName: selected.contains(chapter.id) ? "checkmark.circle.fill" : "circle").frame(minWidth: 44, minHeight: 44) }.buttonStyle(.borderless).accessibilityLabel("Select \(chapter.title)") }
                                 NavigationLink {
                                     ChapterReaderDestination(mangaID: summary.id, mangaTitle: details?.title ?? summary.title,
-                                        chapter: chapter, adapter: adapter, extensions: extensions, chapters: chapters.items)
+                                        chapter: chapter, adapter: adapter, extensions: extensions, chapters: chapters.items, coverURL: details?.coverURL ?? summary.coverURL)
                                 } label: {
                                     HStack(spacing: 12) {
                                         if settings.snapshot.preferences.chapterThumbnails {
@@ -164,11 +171,20 @@ struct SourceEntryView: View {
             }
         }
         .scrollContentBackground(.hidden).background(MidokuTheme.background)
+        .modifier(SolidNavigationBar())
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Button(selecting ? "Done" : "Select") { selecting.toggle(); selected.removeAll() }
-                NavigationLink { ClipboardView() } label: { Label("Chapter clipboard", systemImage: "doc.on.clipboard") }
-            }
+            ToolbarItem(placement: .topBarTrailing) {
+                if let existing = existingEntries.first {
+                    NavigationLink { LibraryEntryView(entryID: existing.id, extensions: extensions) } label: {
+                        Label("In library", systemImage: "checkmark").labelStyle(.titleAndIcon)
+                    }
+                } else {
+                    Button { addToLibrary() } label: {
+                        if adding { ProgressView() }
+                        else { Label("Add to library", systemImage: "plus").labelStyle(.titleAndIcon) }
+                    }.disabled(details == nil || adding)
+                }
+            }.sharedBackgroundVisibility(.hidden)
         }
         .safeAreaInset(edge: .bottom) {
             if selecting {
@@ -179,7 +195,6 @@ struct SourceEntryView: View {
                 }.padding().background(MidokuTheme.surface)
             }
         }
-        .sheet(isPresented: $adding) { AddSourceEntryView(adapter: adapter, mangaID: summary.id, title: details?.title ?? summary.title, language: chapterLanguage.isEmpty ? nil : chapterLanguage, extensions: extensions) }
         .navigationTitle("Entry")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: detailRetry) {
@@ -214,6 +229,21 @@ struct SourceEntryView: View {
                 let current = try await extensions.adapter(for: adapter.connection)
                 return try await current.chapters(mangaID: summary.id, cursor: cursor, language: language)
             }
+        }
+    }
+    private func addToLibrary() {
+        guard let details, !adding else { return }
+        adding = true; actionMessage = nil
+        let records = chapters.isStale ? [] : chapters.items
+        let language = chapterLanguage.isEmpty ? nil : chapterLanguage
+        Task {
+            do {
+                let id = try await library.addVisible(details: details, connection: adapter.connection, records: records, language: language)
+                adding = false
+                actionMessage = "Added to library. Checking for the remaining chapters…"
+                await library.refresh(entryIDs: [id])
+                actionMessage = library.refreshMessage
+            } catch { adding = false; actionMessage = error.localizedDescription }
         }
     }
     private func copy(_ records: [ChapterRecord]) {

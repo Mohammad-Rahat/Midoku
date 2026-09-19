@@ -11,6 +11,7 @@ struct LibraryEntryView: View {
     @State private var sources = false
     @State private var pasting = false
     @State private var removing = false
+    @State private var resetting = false
     @State private var selecting = false
     @State private var selected: Set<UUID> = []
     @State private var filter = "all"
@@ -46,6 +47,7 @@ struct LibraryEntryView: View {
                             Text("\(entry.slots.count) chapters").font(.subheadline.weight(.semibold))
                             Spacer()
                             filters(entry)
+                            NavigationLink { ClipboardView() } label: { Label("Chapter clipboard", systemImage: "doc.on.clipboard").labelStyle(.iconOnly).frame(width: 44, height: 44) }.buttonStyle(.plain)
                             Button(selecting ? "Done" : "Select") { selecting.toggle(); selected.removeAll() }
                         }
                         if entry.slots.isEmpty {
@@ -68,6 +70,7 @@ struct LibraryEntryView: View {
                 if library.refreshing { ProgressView() }
                 Menu {
                     Button("Edit details", systemImage: "pencil") { editing = true }
+                    Button("Reset details", systemImage: "arrow.counterclockwise") { resetting = true }
                     Button("Manage sources", systemImage: "link") { sources = true }
                     Button("Refresh", systemImage: "arrow.clockwise") { Task { await library.refresh(entryIDs: [entryID]) } }.disabled(library.refreshing)
                     Button("Paste chapters (\(state.clipboard.count))", systemImage: "doc.on.clipboard") { pasting = true }.disabled(state.clipboard.isEmpty)
@@ -75,7 +78,7 @@ struct LibraryEntryView: View {
                     Button("Restore automatic reading order", systemImage: "arrow.up.arrow.down") { change { try $0.library.editEntry(entryID) { $0.manualOrder = false } } }
                     Button("Remove from library", systemImage: "trash", role: .destructive) { removing = true }
                 } label: { Image(systemName: "ellipsis.circle").accessibilityLabel("Entry actions") }.disabled(entry == nil)
-            }
+            }.sharedBackgroundVisibility(.hidden)
         }
         #if DEBUG
         .onAppear {
@@ -89,6 +92,9 @@ struct LibraryEntryView: View {
         .sheet(item: $renamedSlot) { slot in ChapterEditor(entryID: entryID, slotID: slot.id, renameOnly: true) }
         .sheet(item: $editedSlot) { slot in ChapterEditor(entryID: entryID, slotID: slot.id) }
         .sheet(item: $alternatives) { slot in AlternativesView(entryID: entryID, slotID: slot.id) }
+        .confirmationDialog("Reset entry details?", isPresented: $resetting, titleVisibility: .visible) {
+            Button("Reset details", role: .destructive) { change { try $0.library.resetDetails(entryID) } }
+        } message: { Text("Restore source titles, descriptions, authors, entry and chapter covers, chapter names, reader defaults, and automatic order. All added chapters, source links, categories, and reading progress are kept.") }
         .confirmationDialog("Remove this entry?", isPresented: $removing, titleVisibility: .visible) {
             Button("Remove from library", role: .destructive) { Task { do { try await settings.commit { $0.library.removeEntries([entryID]) }; dismiss() } catch { message = error.localizedDescription } } }
         } message: { Text("Downloads, History, and shared progress are kept. Only this entry and its chapter arrangement are removed.") }

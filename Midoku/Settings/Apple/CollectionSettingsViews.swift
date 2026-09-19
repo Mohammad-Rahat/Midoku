@@ -37,10 +37,10 @@ struct CategoriesSettingsView: View {
             }.listRowBackground(MidokuTheme.surface)
         }.settingsStyle().navigationTitle("Categories")
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { EditButton().disabled(settings.snapshot.categories.isEmpty) }
+                ToolbarItem(placement: .topBarTrailing) { EditButton().disabled(settings.snapshot.categories.isEmpty) }.sharedBackgroundVisibility(.hidden)
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { edit(nil) } label: { Label("Add category", systemImage: "plus") }
-                }
+                }.sharedBackgroundVisibility(.hidden)
             }
             .sheet(isPresented: $showingEditor) {
                 NameEditor(title: editing == nil ? "New category" : "Rename category", name: name, limit: 80) { value in
@@ -79,10 +79,10 @@ struct NameEditor: View {
                 } footer: { Text("Up to \(limit) characters.") }.listRowBackground(MidokuTheme.surface)
             }.settingsStyle().navigationTitle(title)
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }.sharedBackgroundVisibility(.hidden)
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Save") { commit() }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || name.count > limit)
-                    }
+                    }.sharedBackgroundVisibility(.hidden)
                 }
         }.presentationDetents([.medium, .large])
     }
@@ -136,7 +136,7 @@ struct HomeSectionsSettingsView: View {
                 Text("Drag to reorder, or use each section's menu. Hiding or deleting a section does not remove source data or reading progress.")
             }.listRowBackground(MidokuTheme.surface)
         }.settingsStyle().navigationTitle("Home sections")
-            .toolbar { EditButton().disabled(settings.snapshot.homeSections.isEmpty) }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { EditButton().disabled(settings.snapshot.homeSections.isEmpty) }.sharedBackgroundVisibility(.hidden) }
             .sheet(item: $renaming) { section in
                 NameEditor(title: "Rename section", name: section.title, limit: 100) { value in
                     settings.update { state in
@@ -180,9 +180,8 @@ struct PinnedHomeView: View {
                 }.refreshable { refresh += 1 }
             }
         }
-        .background(MidokuTheme.background).navigationTitle("Home").navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            NavigationLink { HomeSectionsSettingsView() } label: { Label("Manage Home sections", systemImage: "slider.horizontal.3") }
+        .mainScreenHeader("Home") {
+            NavigationLink { HomeSectionsSettingsView() } label: { Label("Manage Home sections", systemImage: "slider.horizontal.3").frame(width: 44, height: 44) }
         }
     }
 }
@@ -295,11 +294,15 @@ struct ReadingHistoryView: View {
                         Section(day.formatted(date: .abbreviated, time: .omitted)) {
                             ForEach(settings.snapshot.history.filter { Calendar.current.startOfDay(for: $0.openedAt) == day }) { record in
                                 NavigationLink { HistoryReaderDestination(record: record, extensions: extensions) } label: {
+                                    HStack(spacing: 14) {
+                                        HistoryCoverView(record: record, extensions: extensions)
+                                            .frame(width: 48, height: 72).clipShape(RoundedRectangle(cornerRadius: 5))
                                     VStack(alignment: .leading, spacing: 5) {
                                         Text(record.mangaTitle).font(.headline)
                                         Text(record.chapter.number.map { "Chapter \($0)" } ?? record.chapter.title).font(.subheadline)
                                         Text(record.sourceName).font(.caption).foregroundStyle(MidokuTheme.secondaryText)
                                     }.padding(.vertical, 4)
+                                    }
                                 }.swipeActions {
                                     Button("Remove", role: .destructive) { settings.update { $0.history.removeAll { $0.id == record.id } } }
                                 }.contextMenu {
@@ -310,9 +313,9 @@ struct ReadingHistoryView: View {
                             }
                         }.listRowBackground(MidokuTheme.surface)
                     }
-                }.settingsStyle(largeTitle: true)
+                }.settingsStyle(largeTitle: true).contentMargins(.top, 0, for: .scrollContent)
             }
-        }.navigationTitle("History").navigationBarTitleDisplayMode(.large)
+        }.mainScreenHeader("History")
     }
     private var days: [Date] { Array(Set(settings.snapshot.history.map { Calendar.current.startOfDay(for: $0.openedAt) })).sorted(by: >) }
 }

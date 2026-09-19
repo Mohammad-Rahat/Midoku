@@ -9,6 +9,7 @@ struct LibraryView: View {
     @Environment(DownloadManager.self) private var downloads
     @Environment(\.dynamicTypeSize) private var textSize
     @State private var query = ""
+    @State private var submittedQuery = ""
     @State private var category = "all"
     @State private var status: PersonalStatus?
     @State private var unreadOnly = false
@@ -29,7 +30,7 @@ struct LibraryView: View {
     private func visible(in category: String) -> [PersonalEntry] {
         let downloaded = Set(downloads.items.filter { $0.status == .completed }.map { $0.record.id })
         return state.entries.filter { entry in
-            (query.isEmpty || state.title(entry).localizedStandardContains(query)) &&
+            (submittedQuery.isEmpty || state.title(entry).localizedStandardContains(submittedQuery)) &&
             (category == "all" || (category == "uncategorized" ? entry.categoryIDs.isEmpty : entry.categoryIDs.contains { $0.uuidString == category })) &&
             (status == nil || entry.status == status) && (!unreadOnly || entry.slots.contains { !state.isRead($0) }) &&
             (!downloadedOnly || entry.slots.contains { $0.preferred.flatMap { state.chapter($0.chapterID) }.map { downloaded.contains($0.identity) } == true }) &&
@@ -52,7 +53,8 @@ struct LibraryView: View {
                 HStack {
                     Image(systemName: "magnifyingglass").foregroundStyle(MidokuTheme.secondaryText)
                     TextField("Search your library", text: $query).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Clear search") }
+                        .submitLabel(.search).onSubmit { submittedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    if !query.isEmpty { Button { query = ""; submittedQuery = "" } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Clear search") }
                     filterMenu
                 }.padding(12).background(MidokuTheme.surface, in: RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 16).padding(.vertical, 8)
                 categoryTabs
@@ -80,9 +82,8 @@ struct LibraryView: View {
             if let message = message ?? library.refreshMessage { Text(message).font(.caption).foregroundStyle(MidokuTheme.secondaryText).padding(.horizontal, 16) }
         }
         }
-        .background(MidokuTheme.background).navigationTitle(selecting ? "\(selected.count) selected" : "Library").navigationBarTitleDisplayMode(selecting ? .inline : .large)
-        .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
+        .mainScreenHeader(selecting ? "\(selected.count) selected" : "Library") {
+            HStack(spacing: 16) {
                 Button(selecting ? "Done" : "Select") { selecting.toggle(); selected.removeAll() }.disabled(state.entries.isEmpty)
                 Menu {
                     Button("New empty entry", systemImage: "plus") { creating = true }
@@ -152,7 +153,7 @@ struct LibraryView: View {
                 VStack(spacing: 12) {
                     ContentUnavailableView(query.isEmpty ? "No entries here" : "No matches", systemImage: "books.vertical",
                         description: Text(query.isEmpty ? "Add entries to this category or adjust your filters." : "Try another title or adjust your filters."))
-                    Button("Reset filters") { query = ""; status = nil; sourceID = nil; publication = "all"; unreadOnly = false; downloadedOnly = false }
+                    Button("Reset filters") { query = ""; submittedQuery = ""; status = nil; sourceID = nil; publication = "all"; unreadOnly = false; downloadedOnly = false }
                 }.padding(.top, 32)
             } else if listLayout || textSize.isAccessibilitySize {
                 LazyVStack(spacing: 12) { ForEach(entries) { entry in entryLink(entry, compact: true) } }.padding(16)

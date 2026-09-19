@@ -160,7 +160,7 @@ struct RestorePreviewView: View {
                     if busy { ProgressView("Restoring") }
                 }.listRowBackground(MidokuTheme.surface)
             }.settingsStyle().navigationTitle("Review backup").disabled(busy)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(busy) } }
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(busy) }.sharedBackgroundVisibility(.hidden) }
                 .interactiveDismissDisabled(busy)
                 .confirmationDialog(merge ? "Merge this backup?" : "Replace your current setup?", isPresented: $confirming, titleVisibility: .visible) {
                     Button(merge ? "Merge" : "Replace", role: merge ? nil : .destructive) { restore() }
@@ -179,7 +179,7 @@ struct RestorePreviewView: View {
                 }
                 try await settings.restore(preview.snapshot, merge: merge, extensions: extensions.available, appVersion: AppBuild.displayVersion,
                     retainedConnectionIDs: Set(downloads.items.map { $0.record.identity.listing.connectionID }))
-                await extensions.images.clear()
+                try? await extensions.images.clear()
                 dismiss()
             } catch { message = (error as? SettingsFailure)?.localizedDescription ?? "Restore could not finish. Your previous setup is still available." }
         }

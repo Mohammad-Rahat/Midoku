@@ -46,7 +46,7 @@ struct StorageSettingsView: View {
                 LabeledContent("App data & recovery copies", value: usage.map { format($0.appData) } ?? "Calculating…")
                 LabeledContent("Downloads & partial files", value: format(downloadBytes))
                 LabeledContent("Temporary disk cache", value: usage.map { format($0.cache) } ?? "Calculating…")
-                LabeledContent("Image memory limit", value: "64 MB")
+                LabeledContent("Image memory limit", value: "96 MB")
             }.listRowBackground(MidokuTheme.surface)
             Section {
                 Button("Clear cache") { clearCache = true }.disabled(busy)
@@ -65,8 +65,8 @@ struct StorageSettingsView: View {
                     Task {
                         busy = true
                         do {
+                            try await extensions.images.clear()
                             try await maintenance.clearCache()
-                            await extensions.images.clear()
                             message = "Cache cleared. Saved chapters and reading data were kept."
                         } catch { message = "Some cache files could not be removed. Your reading data was kept." }
                         await refresh(); busy = false
@@ -155,6 +155,7 @@ struct OfflineChapterReader: View {
     @Environment(\.scenePhase) private var phase
     @State private var restoreGeneration: UUID?
     @State private var selected = 0
+    @State private var jumpRevision = 0
     @State private var device = ReaderDeviceController()
     @State private var showPreferences = false
     @State private var loadedPages: Set<String> = []
@@ -165,23 +166,23 @@ struct OfflineChapterReader: View {
         return preferences.mode == .continuous ? endVisible : selected == download.pages.count - 1
     }
     var body: some View {
-        VStack(spacing: 0) {
-            if controlsVisible || voiceOver { Text("\(download.record.sourceName) · Saved on this device")
-                .font(.caption).foregroundStyle(MidokuTheme.secondaryText).padding(10) }
-            GeometryReader { geometry in
+        ReaderChrome(title: chapterNavigation.title ?? download.record.chapter.number.map { "Chapter \($0)" } ?? download.record.chapter.title,
+            subtitle: download.record.mangaTitle + " · Saved on this device", visible: controlsVisible || voiceOver,
+            preferences: { showPreferences = true }, pages: { viewport in
                 if preferences.mode == .continuous {
                     ScrollViewReader { proxy in
                         ScrollView {
                             LazyVStack(spacing: 0) {
                                 ReaderChapterBoundary(forward: false)
                                 ForEach(Array(download.pages.enumerated()), id: \.offset) { index, page in
-                                    image(page, index: index, size: geometry.size, continuous: true).id(index)
+                                    image(page, index: index, size: viewport, continuous: true).id(index)
                                         .onScrollVisibilityChange(threshold: 0.5) { visible in if visible { selected = index } }
                                 }
                                 Color.clear.frame(height: 1).onScrollVisibilityChange(threshold: 0.9) { endVisible = $0 }
                                 ReaderChapterBoundary(forward: true)
                             }
                         }.onAppear { proxy.scrollTo(selected, anchor: .top) }
+                        .onChange(of: jumpRevision) { proxy.scrollTo(selected, anchor: .top) }
                     }
                 } else if download.pages.indices.contains(selected) {
                     VStack(spacing: 0) {
@@ -193,24 +194,14 @@ struct OfflineChapterReader: View {
                     }
                 }
             }
-            if controlsVisible || voiceOver { HStack {
-                Button("Previous") { selected = max(0, selected - 1) }.disabled(selected == 0 || preferences.mode == .continuous)
-                Spacer()
-                Text("\(selected + 1) / \(download.pages.count)").monospacedDigit()
-                Spacer()
-                Button("Next") { selected = min(download.pages.count - 1, selected + 1) }
-                    .disabled(selected + 1 >= download.pages.count || preferences.mode == .continuous)
-            }.padding().background(MidokuTheme.surface) }
-        }
+            , controls: {
+                ReaderPageControls(index: selected, count: download.pages.count) { target in
+                    jump(target - selected)
+                }
+            })
         .background(preferences.background == .black ? Color.black : (preferences.background == .paper ? Color.white : MidokuTheme.background))
-        .preference(key: ReaderControlsPreference.self, value: controlsVisible || voiceOver)
-        .statusBarHidden(!controlsVisible && !voiceOver)
-        .modifier(ReaderBackGesture())
-        .toolbar(controlsVisible || voiceOver ? .visible : .hidden, for: .navigationBar)
-        .navigationTitle(chapterNavigation.title ?? download.record.mangaTitle).navigationBarTitleDisplayMode(.inline).toolbar(.hidden, for: .tabBar)
-        .toolbar { Button { showPreferences = true } label: { Label("Reader preferences", systemImage: "slider.horizontal.3") } }
         .sheet(isPresented: $showPreferences) {
-            NavigationStack { readerSettings.toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showPreferences = false } } } }
+            NavigationStack { readerSettings.toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showPreferences = false } }.sharedBackgroundVisibility(.hidden) } }
         }
         .onAppear {
             restoreGeneration = settings.restoreGeneration
@@ -255,7 +246,7 @@ struct OfflineChapterReader: View {
         let target = selected + delta
         if target < 0 { chapterNavigation.previous?() }
         else if target >= download.pages.count { chapterNavigation.next?() }
-        else { selected = target }
+        else { selected = target; jumpRevision += 1 }
     }
     private func save() {
         guard restoreGeneration == settings.restoreGeneration, download.pages.indices.contains(selected), settings.snapshot.connections.contains(where: { $0.id == download.record.identity.listing.connectionID }) else { return }
@@ -271,6 +262,7 @@ struct ChapterReaderDestination: View {
     let adapter: any SourceAdapter
     let extensions: ExtensionEnvironment
     var chapters: [ChapterRecord] = []
+    var coverURL: URL? = nil
     @State private var current: ChapterRecord?
     @Environment(AppSettingsStore.self) private var settings
     private var active: ChapterRecord { current ?? chapter }
@@ -293,7 +285,7 @@ struct ChapterReaderDestination: View {
         } else if let download = downloads.items.first(where: { $0.record.id == identity && $0.status == .completed }) {
             OfflineChapterReader(download: download)
         } else {
-            SourceChapterReader(mangaID: mangaID, mangaTitle: mangaTitle, chapter: active, adapter: adapter, extensions: extensions)
+            SourceChapterReader(mangaID: mangaID, mangaTitle: mangaTitle, chapter: active, adapter: adapter, extensions: extensions, coverURL: coverURL)
         }
         }.id(active.id).environment(\.readerChapterNavigation, navigation)
     }

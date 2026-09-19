@@ -187,8 +187,8 @@ nonisolated struct LibraryState: Codable, Sendable {
     }
 
     @discardableResult
-    mutating func add(details: MangaDetails, connectionID: UUID, records: [ChapterRecord], language: String?, categories: Set<UUID> = []) throws -> UUID {
-        let listingID = try remember(details: details, connectionID: connectionID, records: records, complete: true, language: language)
+    mutating func add(details: MangaDetails, connectionID: UUID, records: [ChapterRecord], language: String?, categories: Set<UUID> = [], complete: Bool = true) throws -> UUID {
+        let listingID = try remember(details: details, connectionID: connectionID, records: records, complete: complete, language: language)
         if let existing = entries.first(where: { $0.links.contains { $0.listingID == listingID } }) { return existing.id }
         var entry = PersonalEntry()
         entry.primaryListingID = listingID; entry.categoryIDs = categories
@@ -199,6 +199,21 @@ nonisolated struct LibraryState: Codable, Sendable {
         sortSequence(&entry)
         entries.append(entry)
         return entry.id
+    }
+
+    /// Reset presentation overrides without rebuilding or discarding the mixed-source composition.
+    mutating func resetDetails(_ id: UUID) throws {
+        try editEntry(id) { entry in
+            if let original = entry.links.first?.listingID {
+                entry.primaryListingID = original
+                entry.titleOverride = nil; entry.descriptionOverride = nil; entry.authorOverride = nil
+            }
+            entry.coverID = nil; entry.hidesCover = false
+            entry.readerOverride = nil; entry.manualOrder = false; entry.descendingDisplay = false
+            for slot in entry.slots.indices {
+                for variant in entry.slots[slot].variants.indices { entry.slots[slot].variants[variant].edits = ChapterEdits() }
+            }
+        }
     }
 
     @discardableResult

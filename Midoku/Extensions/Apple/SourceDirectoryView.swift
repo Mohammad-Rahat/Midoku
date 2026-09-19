@@ -45,7 +45,15 @@ struct SourceDirectoryView: View {
         }
         .scrollContentBackground(.hidden)
         .background(MidokuTheme.background)
-        .navigationTitle("Browse").navigationBarTitleDisplayMode(.large)
+        .contentMargins(.top, 0, for: .scrollContent)
+        .mainScreenHeader("Browse") {
+            NavigationLink { GlobalSearchView(extensions: extensions) } label: {
+                Label("Search all extensions", systemImage: "magnifyingglass").frame(width: 44, height: 44)
+            }
+            NavigationLink { ExtensionManagementView(extensions: extensions) } label: {
+                Label("Manage extensions", systemImage: "plus").frame(width: 44, height: 44)
+            }
+        }
     }
 }
 

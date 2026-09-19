@@ -25,6 +25,7 @@ enum LibraryPreviewData {
             try state.markSlots(entryID: id, slots: Set(state.library.entry(id)?.slots.prefix(1).map(\.id) ?? []), read: true)
             try state.library.editEntry(id) { $0.status = .reading; $0.lastReadAt = .now }
             if let resume = state.library.entry(id)?.slots.dropFirst().first?.preferred.flatMap({ state.library.chapter($0.chapterID) }) {
+                state.history.append(ReadingRecord(identity: resume.identity, mangaTitle: details.title, sourceName: "Source B", chapter: resume.record, openedAt: .now, entryID: id, slotID: state.library.entry(id)?.slots.dropFirst().first?.id))
                 state.progress.append(ReadingPosition(identity: resume.identity, pageID: "preview-page", pageIndex: 11, pageCount: 19, fraction: 0, updatedAt: .now))
             }
             state.preferences.libraryLayout = LibraryLayoutPreferences(style: .custom, portraitColumns: 3, landscapeColumns: 5)

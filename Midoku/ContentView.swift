@@ -36,7 +36,15 @@ struct ContentView: View {
     var body: some View {
         Group {
             if initialized {
-                tabs
+                Group {
+                    #if DEBUG
+                    if CommandLine.arguments.contains("--reader-preview") || CommandLine.arguments.contains("--fullscreen-preview") {
+                        NavigationStack { ReaderChromePreview() }
+                    } else { tabs }
+                    #else
+                    tabs
+                    #endif
+                }
                     .allowsHitTesting(!lock.state.isLocked && !settings.isRestoring)
                     .accessibilityHidden(lock.state.isLocked)
                     .overlay { if lock.state.isLocked { AppLockView(lock: lock) } }
@@ -68,9 +76,9 @@ struct ContentView: View {
                 do {
                     let id = try await LibraryPreviewData.prepare(settings)
                     if CommandLine.arguments.contains("--home-preview") { selectedTab = .home }
-                    else if CommandLine.arguments.contains("--browse-preview") { selectedTab = .browse }
+                    else if CommandLine.arguments.contains("--browse-preview") || CommandLine.arguments.contains("--search-preview") { selectedTab = .browse }
                     else if CommandLine.arguments.contains("--history-preview") { selectedTab = .history }
-                    else if CommandLine.arguments.contains("--settings-preview") || CommandLine.arguments.contains("--layout-preview") { selectedTab = .settings }
+                    else if CommandLine.arguments.contains("--settings-preview") || CommandLine.arguments.contains("--settings-bottom-preview") || CommandLine.arguments.contains("--layout-preview") { selectedTab = .settings }
                     else { selectedTab = .library }
                         if CommandLine.arguments.contains("--entry-preview") || CommandLine.arguments.contains("--rename-preview"), libraryPath.isEmpty { libraryPath.append(id) }
                 } catch { settings.update { _ in throw error } }
@@ -100,6 +108,7 @@ struct ContentView: View {
     }
 
     private var tabs: some View {
+        VStack(spacing: 0) {
         TabView(selection: $selectedTab) {
             ForEach(MidokuTab.allCases) { tab in
                 tabContent(tab)
@@ -109,9 +118,10 @@ struct ContentView: View {
             }
         }
         .toolbar(.hidden, for: .tabBar)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if hiddenBars[selectedTab] != true { TraditionalTabBar(selection: $selectedTab) }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        if hiddenBars[selectedTab] != true { TraditionalTabBar(selection: $selectedTab) }
         }
+        .background(MidokuTheme.background)
         .sheet(item: Binding(get: { extensions.challenges.current }, set: { value in
             if value == nil, let challenge = extensions.challenges.current { extensions.challenges.cancel(id: challenge.id) }
         }), onDismiss: { extensions.challenges.presentationDidDismiss() }) { challenge in
@@ -130,7 +140,14 @@ struct ContentView: View {
                     .navigationDestination(for: UUID.self) { LibraryEntryView(entryID: $0, extensions: extensions) }
             }
         case .browse:
-            NavigationStack(path: $browsePath) { SourceDirectoryView(extensions: extensions) }
+            NavigationStack(path: $browsePath) {
+                #if DEBUG
+                if CommandLine.arguments.contains("--search-preview") { GlobalSearchView(extensions: extensions) }
+                else { SourceDirectoryView(extensions: extensions) }
+                #else
+                SourceDirectoryView(extensions: extensions)
+                #endif
+            }
         case .history:
             NavigationStack(path: $historyPath) { ReadingHistoryView(extensions: extensions) }
         case .settings:

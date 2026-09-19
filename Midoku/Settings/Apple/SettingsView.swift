@@ -43,12 +43,15 @@ extension AppSettingsStore {
 struct SettingsListStyle: ViewModifier {
     var largeTitle = false
     func body(content: Content) -> some View {
-        content.listStyle(.insetGrouped)
+        let styled = content.listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(MidokuTheme.background)
             .foregroundStyle(MidokuTheme.primaryText)
             .environment(\.defaultMinListRowHeight, 52)
-            .navigationBarTitleDisplayMode(largeTitle ? .large : .inline)
+            .navigationBarTitleDisplayMode(.inline)
+            .presentationBackground(MidokuTheme.background)
+        if largeTitle { styled }
+        else { styled.modifier(SolidNavigationBar()) }
     }
 }
 extension View { func settingsStyle(largeTitle: Bool = false) -> some View { modifier(SettingsListStyle(largeTitle: largeTitle)) } }
@@ -108,7 +111,7 @@ struct SettingsView: View {
                     SettingLabel(title: "Extensions", symbol: "square.grid.2x2", detail: "\(extensions.connections.count) source connections")
                 }
                 NavigationLink { StorageSettingsView(extensions: extensions) } label: {
-                    SettingLabel(title: "Downloads & storage", symbol: "arrow.down.circle")
+                    SettingLabel(title: "Downloads & storage", symbol: "arrow.down.circle", detail: "Downloads, cover cache, and storage")
                 }
                 NavigationLink { BackupSettingsView(extensions: extensions) } label: {
                     SettingLabel(title: "Backup & restore", symbol: "externaldrive")
@@ -125,7 +128,10 @@ struct SettingsView: View {
             }.listRowBackground(MidokuTheme.surface)
             #endif
         }
-        .settingsStyle(largeTitle: true).navigationTitle("Settings")
+        #if DEBUG
+        .defaultScrollAnchor(CommandLine.arguments.contains("--settings-bottom-preview") ? .bottom : .top)
+        #endif
+        .settingsStyle(largeTitle: true).contentMargins(.top, 0, for: .scrollContent).mainScreenHeader("Settings")
     }
 }
 

@@ -41,7 +41,7 @@ struct AddSourceEntryView: View {
                     }
                 }
             }.settingsStyle().navigationTitle("Add to library")
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.disabled(working) } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.disabled(working) }.sharedBackgroundVisibility(.hidden) }
         }.interactiveDismissDisabled(working)
         .sheet(item: $destination) { entry in PasteReviewView(entryID: entry.id) }
     }
@@ -102,7 +102,7 @@ struct EntrySourcesView: View {
                     }
                 }
             }.settingsStyle().navigationTitle("Entry sources")
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.disabled(working) } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.disabled(working) }.sharedBackgroundVisibility(.hidden) }
         }.interactiveDismissDisabled(working)
         .confirmationDialog("Follow only future chapters?", isPresented: Binding(get: { following != nil }, set: { if !$0 { following = nil } }), titleVisibility: .visible) {
             if let link = following { Button("Follow future chapters") { follow(link) } }

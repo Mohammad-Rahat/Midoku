@@ -92,9 +92,10 @@ jobs:
           xcrun simctl bootstatus "$device_id" -b
           app="$PWD/build/Simulator/Build/Products/Debug-iphonesimulator/Midoku.app"
           bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
+          xcrun simctl uninstall "$device_id" "$bundle_id" || true
           xcrun simctl install "$device_id" "$app"
           mkdir -p build/screenshots
-          for screen in home library browse history entry settings layout rename; do
+          for screen in home library browse history entry settings settings-bottom layout rename search reader fullscreen; do
             xcrun simctl terminate "$device_id" "$bundle_id" || true
             xcrun simctl launch "$device_id" "$bundle_id" --library-preview "--$screen-preview"
             sleep 4

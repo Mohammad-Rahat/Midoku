@@ -30,7 +30,7 @@ struct ClipboardView: View {
                 }
             }
         }.settingsStyle().navigationTitle("Chapter clipboard")
-        .toolbar { Button("Clear") { Task { do { try await settings.commit { $0.library.clipboard = [] } } catch { self.error = error.localizedDescription } } }.disabled(settings.snapshot.library.clipboard.isEmpty) }
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Clear") { Task { do { try await settings.commit { $0.library.clipboard = [] } } catch { self.error = error.localizedDescription } } }.disabled(settings.snapshot.library.clipboard.isEmpty) }.sharedBackgroundVisibility(.hidden) }
         .sheet(item: $destination) { entry in PasteReviewView(entryID: entry.id) }
     }
 }
@@ -89,8 +89,8 @@ struct PasteReviewView: View {
                 } else { Text("This entry is no longer available.") }
             }.settingsStyle().navigationTitle("Review chapters")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(saving) }
-                ToolbarItem(placement: .confirmationAction) { Button(saving ? "Saving…" : "Paste") { save() }.disabled(saving || !canSave) }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(saving) }.sharedBackgroundVisibility(.hidden)
+                ToolbarItem(placement: .confirmationAction) { Button(saving ? "Saving…" : "Paste") { save() }.disabled(saving || !canSave) }.sharedBackgroundVisibility(.hidden)
             }
         }.interactiveDismissDisabled(saving)
         .task {
@@ -153,8 +153,8 @@ struct ChapterEditor: View {
                 if let error { Text(error).foregroundStyle(.red) }
             }.settingsStyle().navigationTitle(renameOnly ? "Rename chapter" : "Edit chapter")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(saving) }
-                ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.disabled(variantID == nil || saving || (edits.title != nil && (edits.title?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true || (edits.title?.count ?? 0) > 1000))) }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(saving) }.sharedBackgroundVisibility(.hidden)
+                ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.disabled(variantID == nil || saving || (edits.title != nil && (edits.title?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true || (edits.title?.count ?? 0) > 1000))) }.sharedBackgroundVisibility(.hidden)
             }
         }.interactiveDismissDisabled(saving)
         .task {
@@ -215,7 +215,7 @@ struct AlternativesView: View {
                     } footer: { Text("Choose the release used by Continue and Next Chapter. Page positions belong to each release and are never transferred.") }
                 }
             }.settingsStyle().navigationTitle("Chapter alternatives")
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }.sharedBackgroundVisibility(.hidden) }
         }
     }
 }

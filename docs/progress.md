@@ -375,3 +375,13 @@ contract. esbuild still performs the TypeScript compilation and bundling.
 
 - Delivered `Midoku-comix-unsigned.ipa` (4,241,270 bytes), SHA-256 `a0f91f561c935220c3021de004cfffbe185129ec9ede5d82c7f98b51df825564`. Verified ZIP integrity, arm64 Mach-O, bundled Comix, bundle ID `com.raahat.Midoku`, and existing minimum OS 27. Signing/deployment settings are unchanged.
 - Final checks: `npm ci && npm test` passed all 21 adapter/tooling tests; `swift test` passed 51 tests in 12 suites; Release archive and Debug simulator build succeeded. Shared browser-policy live smoke `35423133516` returned `ok: true` for safe catalogue, details, chapters and page descriptors. Touch gestures and interactive Cloudflare challenge completion still need device testing; descriptor validation does not establish that every remote page image is available.
+
+## 2026-09-19 device feedback follow-up
+
+- Main screens now draw large titles in compact, solid headers immediately below the status area. The custom bottom navigation occupies its own layout row so lists can reach their last item. Navigation actions use ordinary buttons and opaque surfaces.
+- Source entry Add to library is top-right and durably saves the already-visible metadata/chapters immediately. The remaining chapter list is fetched afterward; incomplete fetches never erase remembered releases. Select and clipboard sit beside the chapter language control.
+- Online/offline readers share overlay controls and an invariant full-screen page viewport, with previous/next chapter and page buttons. Offline continuous reading now supports page jumps too.
+- Covers have separate memory and bounded persistent disk caches with coalesced requests. Downloads & storage exposes Clear cache; downloaded files and custom covers remain separate. History resolves the entry cover, including old records without a saved cover URL.
+- Browse includes global search, with independent per-source results/errors. Source, global and library text search run on keyboard submission, preserving results while typing.
+- Reset details restores source metadata, covers, chapter edits, reader defaults and automatic ordering, while preserving chapter identities, imported sources, exclusions, categories and progress.
+- Added cache persistence/eviction/clearing, partial-add persistence/full refresh, history migration and mixed-source reset regression tests. Local extension checks pass (21 tests); native verification and simulator layout review run in the IPA workflow.

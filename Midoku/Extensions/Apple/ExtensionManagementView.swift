@@ -114,7 +114,7 @@ private struct SourceConnectionSettingsView: View {
                     Task {
                         busy = true
                         await extensions.browserSessions.clearSession(for: connectionID)
-                        await extensions.images.clear()
+                        try? await extensions.images.clear()
                         busy = false; message = "Website session cleared."
                     }
                 }
