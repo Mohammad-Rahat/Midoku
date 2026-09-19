@@ -57,12 +57,15 @@ nonisolated struct ExtensionManifest: Codable, Equatable, Sendable, Identifiable
     let contractVersion: Int
     let domains: [String]
     let capabilities: Set<SourceCapability>
+    var browserRendering: Bool? = nil
+    var imageProcessing: String? = nil
 
     func validate() throws {
         guard (1...Self.supportedContract).contains(contractVersion) else {
             throw ExtensionFailure.incompatibleContract(contractVersion)
         }
-        guard contractVersion >= 2 || !capabilities.contains(.filters) else {
+        guard imageProcessing == nil || imageProcessing == "comix-v1" else { throw ExtensionFailure.invalidManifest("Unknown image processor.") }
+        guard contractVersion >= 2 || (!capabilities.contains(.filters) && browserRendering != true && imageProcessing == nil) else {
             throw ExtensionFailure.invalidManifest("Filters require contract 2.")
         }
         guard id.range(of: #"^[a-z][a-z0-9]*(\.[a-z][a-z0-9-]*)+$"#, options: .regularExpression) != nil,

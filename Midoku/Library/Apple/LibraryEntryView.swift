@@ -164,10 +164,10 @@ struct LibraryEntryView: View {
             if settings.snapshot.preferences.chapterThumbnails { LibraryCoverView(entry: entry, extensions: extensions, overrideID: variant.edits.coverID).frame(width: 42, height: 58).clipped().clipShape(RoundedRectangle(cornerRadius: 6)) }
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text(state.number(variant).flatMap { $0.isEmpty ? nil : "Chapter \($0)" } ?? state.chapterTitle(variant)).font(.subheadline.weight(.semibold))
+                    Text(state.chapterDisplayTitle(variant)).font(.subheadline.weight(.semibold))
                     if state.isRead(slot) { Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint).accessibilityLabel("Read") }
                 }
-                if state.number(variant) != nil { Text(state.chapterTitle(variant)).font(.caption).lineLimit(2) }
+                if variant.edits.title == nil, state.number(variant) != nil { Text(state.chapterTitle(variant)).font(.caption).lineLimit(2) }
                 let source = settings.snapshot.connections.first { $0.id == chapter.identity.listing.connectionID }?.name ?? "Unavailable source"
                 Text(([source, chapter.record.language] + (chapter.record.groups ?? []).map(Optional.some)).compactMap { $0 }.joined(separator: " · ")).font(.caption2).foregroundStyle(MidokuTheme.secondaryText)
                 if let volume = variant.edits.volume ?? chapter.record.volume, !volume.isEmpty { Text("Volume \(volume)").font(.caption2).foregroundStyle(MidokuTheme.secondaryText) }

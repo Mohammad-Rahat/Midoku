@@ -9,6 +9,7 @@ struct SourceChapterReader: View {
     let extensions: ExtensionEnvironment
     var entryID: UUID? = nil
     var slotID: UUID? = nil
+    @Environment(\.readerChapterNavigation) private var chapterNavigation
     @Environment(AppSettingsStore.self) private var settings
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
@@ -70,7 +71,10 @@ struct SourceChapterReader: View {
             }
         }
         .background(MidokuTheme.surface)
-        .navigationTitle(chapter.number.map { "Chapter \($0)" } ?? chapter.title)
+        .navigationTitle(chapterNavigation.title ?? chapter.number.map { "Chapter \($0)" } ?? chapter.title)
+        .preference(key: ReaderControlsPreference.self, value: controlsVisible || voiceOver)
+        .statusBarHidden(!controlsVisible && !voiceOver)
+        .modifier(ReaderBackGesture())
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .toolbar(controlsVisible || voiceOver ? .visible : .hidden, for: .navigationBar)
@@ -129,13 +133,15 @@ struct SourceChapterReader: View {
     }
 
     private func pagedPages(viewport: CGSize) -> some View {
-        Group {
+        VStack(spacing: 0) {
+            if selectedPage == 0 { ReaderChapterBoundary(forward: false) }
             if pages.indices.contains(selectedPage) {
                 ReaderPageImage(index: selectedPage, viewport: viewport, preferences: preferences, continuous: false,
                     tap: tapped, loaded: { loadedPages.insert(pages[selectedPage].id); savePosition() }, imageLoader: { try await loadImage(pages[selectedPage]) },
-                    swipe: { delta in jump(to: selectedPage + delta) })
+                    swipe: { delta in jump(to: selectedPage + delta) }, identity: identity)
                     .id(pages[selectedPage].id)
             }
+            if selectedPage == pages.count - 1 { ReaderChapterBoundary(forward: true) }
         }
     }
 
@@ -149,6 +155,7 @@ struct SourceChapterReader: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 0) {
+                    ReaderChapterBoundary(forward: false)
                     ForEach(Array(pages.enumerated()), id: \.element.id) { index, page in
                         ReaderPageImage(index: index, viewport: viewport, preferences: preferences, continuous: true,
                                         tap: tapped, loaded: {
@@ -160,7 +167,7 @@ struct SourceChapterReader: View {
                                                     pendingResume = nil
                                                 }
                                             }
-                                        }, imageLoader: { try await loadImage(page) })
+                                        }, imageLoader: { try await loadImage(page) }, identity: identity)
                             .id(index)
                             .onGeometryChange(for: ReaderPageGeometry.self) { geometry in
                                 let frame = geometry.frame(in: .named("readerScroll"))
@@ -177,6 +184,7 @@ struct SourceChapterReader: View {
                             }
                     }
                     Color.clear.frame(height: 1).onScrollVisibilityChange(threshold: 0.9) { endVisible = $0 }
+                    ReaderChapterBoundary(forward: true)
                 }
             }
             .coordinateSpace(name: "readerScroll")
@@ -210,7 +218,10 @@ struct SourceChapterReader: View {
         if action == 0 { controlsVisible.toggle() } else { jump(to: selectedPage + action) }
     }
     private func jump(to index: Int) {
-        guard pages.indices.contains(index) else { return }
+        guard pages.indices.contains(index) else {
+            if index < 0 { chapterNavigation.previous?() } else { chapterNavigation.next?() }
+            return
+        }
         pendingResume = nil
         selectedPage = index; positionFraction = 0; jumpRevision += 1
         savePosition()
@@ -235,6 +246,7 @@ struct ReaderPageImage: View {
     let loaded: () -> Void
     let imageLoader: () async throws -> UIImage
     var swipe: (Int) -> Void = { _ in }
+    var identity: SourceChapterIdentity? = nil
     @State private var zoomSheet = false
     @State private var image: UIImage?
     @State private var imageAspect: CGFloat?
@@ -251,7 +263,10 @@ struct ReaderPageImage: View {
                     pageImage(image).frame(width: viewport.width)
                         .onTapGesture(count: 2) { zoomSheet = true }
                         .onTapGesture { tap(0.5) }
-                        .contextMenu { Button("Zoom page", systemImage: "plus.magnifyingglass") { zoomSheet = true } }
+                        .contextMenu {
+                            Button("Zoom page", systemImage: "plus.magnifyingglass") { zoomSheet = true }
+                            ReaderCoverActions(image: image, identity: identity)
+                        }
                         .accessibilityAction(named: "Zoom page") { zoomSheet = true }
                         .accessibilityAction(named: "Show reader controls") { tap(0.5) }
                 } else {
@@ -265,6 +280,7 @@ struct ReaderPageImage: View {
                                 if zoom == 1 { tap(location.x / max(1, viewport.width)) }
                                 else { tap(0.5) }
                             }
+                            .contextMenu { ReaderCoverActions(image: image, identity: identity) }
                             .gesture(MagnifyGesture()
                                 .onChanged { zoom = min(4, max(1, gestureZoom * $0.magnification)) }
                                 .onEnded { _ in gestureZoom = zoom })

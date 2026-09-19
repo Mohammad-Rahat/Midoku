@@ -143,7 +143,7 @@ actor JavaScriptExtensionRuntime: ExtensionRuntime {
                     return new Promise((resolve) => {
                         const id = ++sequence;
                         pending.set(id, resolve);
-                        jobs.push({id, request: {url: request.url, headers: request.headers || {}}});
+                        jobs.push({id, request: {url: request.url, headers: request.headers || {}, browserScript: request.browserScript || null}});
                     });
                 }
             });
@@ -170,3 +170,4 @@ actor JavaScriptExtensionRuntime: ExtensionRuntime {
         })();
         """
 }
+

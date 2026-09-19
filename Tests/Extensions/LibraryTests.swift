@@ -19,6 +19,19 @@ struct LibraryTests {
     private func entry(_ state: AppSnapshot, _ id: UUID) throws -> PersonalEntry { try #require(state.library.entry(id)) }
     private func numbers(_ state: AppSnapshot, _ id: UUID) throws -> [String] { try entry(state, id).slots.compactMap(\.preferred).compactMap { state.library.number($0) } }
 
+    @Test func customChapterTitleWinsAndSurvivesSourceRefresh() throws {
+        var state = fixture()
+        let connection = state.connections[0].id
+        let id = try state.library.add(details: details(), connectionID: connection, records: records([4]), language: "en")
+        try state.library.editEntry(id) { $0.slots[0].variants[0].edits.title = "A new beginning" }
+        try state.library.refresh(details: details(), connectionID: connection, records: records([4]), language: "en")
+        let variant = try #require(state.library.entry(id)?.slots.first?.preferred)
+        #expect(state.library.chapterDisplayTitle(variant) == "A new beginning")
+        #expect(state.library.chapter(variant.chapterID)?.record.title == "Chapter 4")
+        let decoded = try JSONDecoder().decode(LibraryState.self, from: JSONEncoder().encode(state.library))
+        #expect(decoded.chapterDisplayTitle(variant) == "A new beginning")
+    }
+
     @Test func fillsSourceAGapWithBWithoutImportingTheWholeSeriesAndSurvivesRestart() async throws {
         var state = fixture()
         let a = state.connections[0].id, b = state.connections[1].id

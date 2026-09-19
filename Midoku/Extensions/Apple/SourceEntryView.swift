@@ -113,7 +113,7 @@ struct SourceEntryView: View {
                                 if selecting { Button { if !selected.insert(chapter.id).inserted { selected.remove(chapter.id) } } label: { Image(systemName: selected.contains(chapter.id) ? "checkmark.circle.fill" : "circle").frame(minWidth: 44, minHeight: 44) }.buttonStyle(.borderless).accessibilityLabel("Select \(chapter.title)") }
                                 NavigationLink {
                                     ChapterReaderDestination(mangaID: summary.id, mangaTitle: details?.title ?? summary.title,
-                                        chapter: chapter, adapter: adapter, extensions: extensions)
+                                        chapter: chapter, adapter: adapter, extensions: extensions, chapters: chapters.items)
                                 } label: {
                                     HStack(spacing: 12) {
                                         if settings.snapshot.preferences.chapterThumbnails {

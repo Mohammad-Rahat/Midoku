@@ -350,3 +350,11 @@ contract. esbuild still performs the TypeScript compilation and bundling.
 - Store only the connection inventory in atomic JSON now; retain its UUIDs when
   moving that inventory into the planned library database.
 - Root and Xcode-visible plan copies record the new source/extension decisions.
+
+## Comix and reader controls (implementation)
+
+- Added reviewed Comix contract-2 adapter using the verified primary domain `comix.to` (mirror `comix.ws`), browser API extraction through an isolated connection profile, catalogue/details/chapter/page normalization, and safe/suggestive catalogue scope.
+- Added manifest-gated browser rendering, foreground Cloudflare verification with one retry, and shared byte/grid image decoding for online images and downloads. Source signing remains within its browser context. Live device clearance is not yet verified.
+- Chapter title overrides now take precedence in library rows and the reader, preserving source IDs and numeric ordering. Reader long-press can set chapter or entry covers transactionally using bounded local images.
+- Fullscreen hides the bottom library chapter bar as well as reader controls. Online and offline readers offer previous/next boundary cards and a reserved left-edge close gesture. Source browsing offers adjacency among loaded chapters; library navigation uses the complete canonical sequence.
+- Verification: 21 Node tests pass locally. Swift parse passes; native tests/archive pending the Xcode runner. Image host permissions will be finalized from live source responses before delivery.

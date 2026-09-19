@@ -27,7 +27,8 @@ actor SourceImageStore {
             manifest: manifest, interaction: .foreground, kind: .image
         )
         try Task.checkCancellation()
-        guard let source = CGImageSourceCreateWithData(response.body as CFData, nil),
+        let body = try ComixImageDecoder.decode(response, processor: manifest.imageProcessing)
+        guard let source = CGImageSourceCreateWithData(body as CFData, nil),
               let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, [
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
                 kCGImageSourceThumbnailMaxPixelSize: maximumDimension,

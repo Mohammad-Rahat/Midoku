@@ -7,12 +7,16 @@ export interface Manifest {
     contractVersion: 1 | 2;
     domains: string[];
     capabilities: Capability[];
+    browserRendering?: boolean;
+    imageProcessing?: "comix-v1";
 }
 
 export interface HTTPRequest {
     url: string;
     /** Accept, Accept-Language, and permitted Referer only. The host owns cookies and User-Agent. */
     headers?: Record<string, string>;
+    /** Reviewed browser-enabled adapters only; set window.__midokuResult to a JSON string. */
+    browserScript?: string;
 }
 
 export interface HTTPResponse {

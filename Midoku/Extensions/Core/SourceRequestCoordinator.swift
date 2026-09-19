@@ -10,6 +10,7 @@ actor SourceRequestCoordinator {
     private let transport: any SourceHTTPTransport
     private let sessions: any SourceSessionProviding
     private let verification: any ChallengeResolving
+    private let browser: (any SourceBrowserRendering)?
     private let minimumSpacing: Duration
     private var waitingMetadata: [UUID: Int] = [:]
     private var waitingImages: [UUID: Int] = [:]
@@ -20,12 +21,14 @@ actor SourceRequestCoordinator {
         transport: any SourceHTTPTransport,
         sessions: any SourceSessionProviding,
         verification: any ChallengeResolving,
-        minimumSpacing: Duration = .milliseconds(500)
+        minimumSpacing: Duration = .milliseconds(500),
+        browser: (any SourceBrowserRendering)? = nil
     ) {
         self.transport = transport
         self.sessions = sessions
         self.verification = verification
         self.minimumSpacing = minimumSpacing
+        self.browser = browser
     }
 
     func request(
@@ -42,6 +45,10 @@ actor SourceRequestCoordinator {
         let policy = SourceRequestPolicy(domains: manifest.domains)
         try policy.validate(input.url)
         try policy.validate(headers: input.headers)
+        if let script = input.browserScript {
+            guard kind == .metadata, manifest.browserRendering == true, browser != nil,
+                  !script.isEmpty, script.utf8.count <= 32_768 else { throw ExtensionFailure.requestNotAllowed }
+        }
 
         // One request/verification flow per connection. Other sources remain independent.
         if kind == .metadata { waitingMetadata[connection.id, default: 0] += 1 }
@@ -84,6 +91,12 @@ actor SourceRequestCoordinator {
             for (key, value) in try await sessions.headers(for: currentURL, connectionID: connection.id) {
                 request.setValue(value, forHTTPHeaderField: key)
             }
+            if manifest.imageProcessing == "comix-v1", kind != .metadata,
+               URLComponents(url: currentURL, resolvingAgainstBaseURL: false)?.queryItems?.contains(where: { $0.name == "v3" }) != true,
+               let referer = input.headers.first(where: { $0.key.lowercased() == "referer" })?.value,
+               let origin = URL(string: referer), let host = origin.host {
+                request.setValue("https://" + host, forHTTPHeaderField: "Origin")
+            }
             let response = try await transport.send(request, maximumBytes: (kind == .metadata ? 8 : 32) * 1024 * 1024)
             try Task.checkCancellation()
             try policy.validate(response.url)
@@ -117,6 +130,17 @@ actor SourceRequestCoordinator {
             guard (200..<300).contains(response.status) else {
                 throw ExtensionFailure.httpStatus(response.status)
             }
+            if let script = input.browserScript, let browser {
+                do {
+                    return try await browser.render(response, script: script, connection: connection, policy: policy)
+                } catch ExtensionFailure.verificationRequired {
+                    guard !hasVerified else { throw ExtensionFailure.verificationFailed }
+                    guard interaction == .foreground else { throw ExtensionFailure.verificationRequired }
+                    try await verification.resolve(SourceChallenge(connection: connection, url: currentURL, policy: policy))
+                    hasVerified = true
+                    continue
+                }
+            }
             return response
         }
     }
@@ -137,3 +161,8 @@ nonisolated struct NetworkExtensionHost: ExtensionHost {
     }
 }
 
+
+/// Reviewed adapters may render source HTML in their connection's existing WebKit profile.
+protocol SourceBrowserRendering: Sendable {
+    func render(_ response: SourceHTTPResponse, script: String, connection: SourceConnection, policy: SourceRequestPolicy) async throws -> SourceHTTPResponse
+}

@@ -26,6 +26,9 @@ export function validateManifest(manifest) {
         !/^[a-z][a-z0-9]*(\.[a-z][a-z0-9-]*)+$/.test(manifest.id) ||
         !/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(manifest.version) ||
         typeof manifest.name !== "string" || !manifest.name.trim() || manifest.name.length > 100 ||
+        (manifest.browserRendering !== undefined && typeof manifest.browserRendering !== "boolean") ||
+        (manifest.imageProcessing !== undefined && manifest.imageProcessing !== "comix-v1") ||
+        (manifest.contractVersion === 1 && (manifest.browserRendering || manifest.imageProcessing)) ||
         !Array.isArray(manifest.capabilities) || !manifest.capabilities.length ||
         manifest.capabilities.some(value => !Object.hasOwn(methods, value)) ||
         !Array.isArray(manifest.domains) || manifest.domains.length > 32 ||
@@ -134,3 +137,4 @@ async function main() {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) await main();
+

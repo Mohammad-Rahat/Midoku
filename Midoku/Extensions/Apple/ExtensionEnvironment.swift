@@ -38,7 +38,8 @@ final class ExtensionEnvironment {
         requests = SourceRequestCoordinator(
             transport: URLSessionSourceTransport(),
             sessions: browserSessions,
-            verification: challenges
+            verification: challenges,
+            browser: SourceBrowserRenderer(sessions: browserSessions)
         )
         images = SourceImageStore(requests: requests)
     }

@@ -132,6 +132,10 @@ nonisolated struct LibraryState: Codable, Sendable {
     func description(_ entry: PersonalEntry) -> String { entry.descriptionOverride ?? listing(entry.primaryListingID)?.details.description ?? "" }
     func number(_ variant: ChapterVariant) -> String? { variant.edits.number ?? chapter(variant.chapterID)?.record.number }
     func chapterTitle(_ variant: ChapterVariant) -> String { variant.edits.title ?? chapter(variant.chapterID)?.record.title ?? "Unavailable chapter" }
+    func chapterDisplayTitle(_ variant: ChapterVariant) -> String {
+        if let title = variant.edits.title, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return title }
+        return number(variant).flatMap { $0.isEmpty ? nil : "Chapter \($0)" } ?? chapterTitle(variant)
+    }
     func isRead(_ slot: ChapterSlot) -> Bool {
         if let override = slot.completionOverride { return override }
         guard let variant = slot.preferred, let source = chapter(variant.chapterID) else { return false }

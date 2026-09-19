@@ -61,6 +61,7 @@ nonisolated struct SourceRequestPolicy: Sendable {
 nonisolated struct SourceHTTPRequest: Codable, Sendable {
     let url: URL
     let headers: [String: String]
+    var browserScript: String? = nil
 }
 
 nonisolated struct SourceHTTPResponse: Codable, Sendable {
@@ -124,3 +125,4 @@ nonisolated struct UnavailableChallengeResolver: ChallengeResolving {
         throw ExtensionFailure.verificationRequired
     }
 }
+

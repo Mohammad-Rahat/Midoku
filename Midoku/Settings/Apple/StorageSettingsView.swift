@@ -147,6 +147,9 @@ struct OfflineChapterReader: View {
     let download: SavedDownload
     var entryID: UUID? = nil
     var slotID: UUID? = nil
+    @Environment(\.readerChapterNavigation) private var chapterNavigation
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
+    @State private var controlsVisible = true
     @Environment(DownloadManager.self) private var downloads
     @Environment(AppSettingsStore.self) private var settings
     @Environment(\.scenePhase) private var phase
@@ -163,36 +166,46 @@ struct OfflineChapterReader: View {
     }
     var body: some View {
         VStack(spacing: 0) {
-            Text("\(download.record.sourceName) · Saved on this device")
-                .font(.caption).foregroundStyle(MidokuTheme.secondaryText).padding(10)
+            if controlsVisible || voiceOver { Text("\(download.record.sourceName) · Saved on this device")
+                .font(.caption).foregroundStyle(MidokuTheme.secondaryText).padding(10) }
             GeometryReader { geometry in
                 if preferences.mode == .continuous {
                     ScrollViewReader { proxy in
                         ScrollView {
                             LazyVStack(spacing: 0) {
+                                ReaderChapterBoundary(forward: false)
                                 ForEach(Array(download.pages.enumerated()), id: \.offset) { index, page in
                                     image(page, index: index, size: geometry.size, continuous: true).id(index)
                                         .onScrollVisibilityChange(threshold: 0.5) { visible in if visible { selected = index } }
                                 }
                                 Color.clear.frame(height: 1).onScrollVisibilityChange(threshold: 0.9) { endVisible = $0 }
+                                ReaderChapterBoundary(forward: true)
                             }
                         }.onAppear { proxy.scrollTo(selected, anchor: .top) }
                     }
                 } else if download.pages.indices.contains(selected) {
-                    image(download.pages[selected], index: selected, size: geometry.size, continuous: false).id(selected)
+                    VStack(spacing: 0) {
+                        if selected == 0 { ReaderChapterBoundary(forward: false) }
+                        image(download.pages[selected], index: selected, size: geometry.size, continuous: false).id(selected)
+                        if selected == download.pages.count - 1 { ReaderChapterBoundary(forward: true) }
+                    }
                 }
             }
-            HStack {
+            if controlsVisible || voiceOver { HStack {
                 Button("Previous") { selected = max(0, selected - 1) }.disabled(selected == 0 || preferences.mode == .continuous)
                 Spacer()
                 Text("\(selected + 1) / \(download.pages.count)").monospacedDigit()
                 Spacer()
                 Button("Next") { selected = min(download.pages.count - 1, selected + 1) }
                     .disabled(selected + 1 >= download.pages.count || preferences.mode == .continuous)
-            }.padding().background(MidokuTheme.surface)
+            }.padding().background(MidokuTheme.surface) }
         }
         .background(preferences.background == .black ? Color.black : (preferences.background == .paper ? Color.white : MidokuTheme.background))
-        .navigationTitle(download.record.mangaTitle).navigationBarTitleDisplayMode(.inline).toolbar(.hidden, for: .tabBar)
+        .preference(key: ReaderControlsPreference.self, value: controlsVisible || voiceOver)
+        .statusBarHidden(!controlsVisible && !voiceOver)
+        .modifier(ReaderBackGesture())
+        .toolbar(controlsVisible || voiceOver ? .visible : .hidden, for: .navigationBar)
+        .navigationTitle(chapterNavigation.title ?? download.record.mangaTitle).navigationBarTitleDisplayMode(.inline).toolbar(.hidden, for: .tabBar)
         .toolbar { Button { showPreferences = true } label: { Label("Reader preferences", systemImage: "slider.horizontal.3") } }
         .sheet(isPresented: $showPreferences) {
             NavigationStack { readerSettings.toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showPreferences = false } } } }
@@ -228,9 +241,15 @@ struct OfflineChapterReader: View {
         ReaderPageImage(index: index, viewport: size, preferences: preferences, continuous: continuous,
             tap: { fraction in
                 let delta = preferences.tapNavigation ? preferences.tapZones.action(at: fraction, mode: preferences.mode) : 0
-                selected = max(0, min(download.pages.count - 1, selected + delta))
+                if delta == 0 { controlsVisible.toggle() } else { jump(delta) }
             }, loaded: { loadedPages.insert(page.id) }, imageLoader: { try await downloads.image(page: page, chapterID: download.id) },
-            swipe: { delta in selected = max(0, min(download.pages.count - 1, selected + delta)) })
+            swipe: { jump($0) }, identity: download.record.identity)
+    }
+    private func jump(_ delta: Int) {
+        let target = selected + delta
+        if target < 0 { chapterNavigation.previous?() }
+        else if target >= download.pages.count { chapterNavigation.next?() }
+        else { selected = target }
     }
     private func save() {
         guard restoreGeneration == settings.restoreGeneration, download.pages.indices.contains(selected), settings.snapshot.connections.contains(where: { $0.id == download.record.identity.listing.connectionID }) else { return }
@@ -245,15 +264,29 @@ struct ChapterReaderDestination: View {
     let chapter: ChapterRecord
     let adapter: any SourceAdapter
     let extensions: ExtensionEnvironment
+    var chapters: [ChapterRecord] = []
+    @State private var current: ChapterRecord?
+    @Environment(AppSettingsStore.self) private var settings
+    private var active: ChapterRecord { current ?? chapter }
+    private var ordered: [ChapterRecord] { chapters.sorted { $0.ordinal < $1.ordinal } }
+    private var navigation: ReaderChapterNavigation {
+        guard let index = ordered.firstIndex(where: { $0.id == active.id }) else { return ReaderChapterNavigation() }
+        let before = index > 0 ? ordered[index - 1] : nil
+        let after = index + 1 < ordered.count ? ordered[index + 1] : nil
+        return ReaderChapterNavigation(previousTitle: before?.title, nextTitle: after?.title,
+            previous: before.map { item in { current = item } }, next: after.map { item in { current = item } })
+    }
     @Environment(DownloadManager.self) private var downloads
     private var identity: SourceChapterIdentity {
-        SourceChapterIdentity(listing: SourceListingIdentity(connectionID: adapter.connection.id, externalID: mangaID), externalID: chapter.id)
+        SourceChapterIdentity(listing: SourceListingIdentity(connectionID: adapter.connection.id, externalID: mangaID), externalID: active.id)
     }
     var body: some View {
+        Group {
         if let download = downloads.items.first(where: { $0.record.id == identity && $0.status == .completed }) {
             OfflineChapterReader(download: download)
         } else {
-            SourceChapterReader(mangaID: mangaID, mangaTitle: mangaTitle, chapter: chapter, adapter: adapter, extensions: extensions)
+            SourceChapterReader(mangaID: mangaID, mangaTitle: mangaTitle, chapter: active, adapter: adapter, extensions: extensions)
         }
+        }.id(active.id).environment(\.readerChapterNavigation, navigation)
     }
 }

@@ -24,6 +24,14 @@ struct AboutSettingsView: View {
                 Text("Extension build tools: esbuild (MIT) and TypeScript (Apache 2.0). These development tools are not bundled as app runtimes.")
                     .font(.footnote).foregroundStyle(MidokuTheme.secondaryText)
             }.listRowBackground(MidokuTheme.surface)
+            Section("Open-source acknowledgements") {
+                NavigationLink("Comix protocol and image decoding · Apache 2.0") {
+                    ScrollView {
+                        Text((Bundle.main.url(forResource: "Comix-Apache-2.0", withExtension: "txt").flatMap { try? String(contentsOf: $0, encoding: .utf8) }) ?? "Apache License 2.0 — keiyoushi/extensions-source contributors")
+                            .font(.footnote).textSelection(.enabled).padding()
+                    }.navigationTitle("Comix acknowledgements").navigationBarTitleDisplayMode(.inline)
+                }
+            }
             Section {
                 if let url = URL(string: "https://github.com/Mohammad-Rahat/Midoku") { Link("Project & support", destination: url) }
                 Button("Preview diagnostics") { diagnostics = report() }
