@@ -17,18 +17,22 @@ let script = #"""
  const env=await import(new URL(name,main).href),values=Object.values(env);
  const api=values.find(x=>x&&typeof x.list==='function'&&typeof x.chapters==='function');
  const http=values.find(x=>x&&typeof x.get==='function'&&typeof x.post==='function'&&typeof x.patch==='function'&&typeof x.delete==='function'&&!x.chapters&&!x.interceptors);
- const list=await api.list({limit:5,content_rating:['safe'],page:1,order:{views_30d:'desc'}});
+ const list=await api.list({keyword:'One-Punch Man',limit:5,content_rating:['safe','suggestive'],page:1,order:{views_30d:'desc'}});
  let item,chapters;
- for(const candidate of list.items.filter(x=>x.contentRating==='safe'||x.content_rating==='safe')) {
-   const result=await api.chapters(candidate.hid,{limit:5,page:1,order:{number:'asc'}});
+ for(const candidate of list.items.filter(x=>['safe','suggestive'].includes(x.contentRating??x.content_rating))) {
+   const result=await api.chapters(candidate.hid,{limit:10,page:1,order:{number:'asc'}});
    if(result.items?.length){item=candidate;chapters=result;break;}
  }
  if(!item){window.smokeResult=JSON.stringify({ok:false,error:'No chapters in sample',meta:list.meta||list.pagination,hosts:[...new Set(list.items.map(x=>x.poster?.medium).filter(Boolean).map(x=>new URL(x).hostname))]});return;}
  const detail=await api.get(item.hid);
- const chapter=await http.get('/chapters/'+chapters.items[0].id);
- const pages=chapter.pages,items=Array.isArray(pages)?pages:pages.items;
- const urls=items.map(x=>x.url.startsWith('http')?x.url:(pages.baseUrl||'').replace(/\/$/,'')+'/'+x.url.replace(/^\//,''));
- window.smokeResult=JSON.stringify({ok:true,listKeys:Object.keys(list),meta:list.meta||list.pagination,mangaKeys:Object.keys(detail),chapterKeys:Object.keys(chapter),chapterListKeys:Object.keys(chapters.items[0]),pageKeys:Object.keys(items[0]),hosts:[...new Set([item.poster?.medium,...urls].filter(Boolean).map(x=>new URL(x).hostname))]});
+ const samples=[];
+ for(const record of chapters.items.slice(0,8)) {
+   const chapter=await http.get('/chapters/'+record.id);
+   const pages=chapter.pages,items=Array.isArray(pages)?pages:pages.items;
+   const urls=items.map(x=>x.url.startsWith('http')?x.url:(pages.baseUrl||'').replace(/\/$/,'')+'/'+x.url.replace(/^\//,''));
+   samples.push({chapterID:String(record.id),number:record.number,pageCount:items.length,pageKeys:Object.keys(items[0]||{}),hosts:[...new Set(urls.map(x=>new URL(x).hostname))]});
+ }
+ window.smokeResult=JSON.stringify({ok:true,mangaID:item.hid,coverHost:new URL(item.poster.medium).hostname,samples});
 }catch(e){window.smokeResult=JSON.stringify({ok:false,error:String(e)});}})();void 0;
 """#
 final class Navigation: NSObject, WKNavigationDelegate {
