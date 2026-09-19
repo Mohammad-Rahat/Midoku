@@ -31,7 +31,7 @@ final class ExtensionEnvironment {
     private(set) var available: [ExtensionManifest] = []
     private(set) var errorMessage: String?
     private(set) var isReady = false
-    private var isLoading = false
+    private var loadingTask: Task<Void, Never>?
 
     init(settings: AppSettingsStore) {
         self.settings = settings
@@ -45,13 +45,19 @@ final class ExtensionEnvironment {
     }
 
     func load() async {
-        guard !isReady, !isLoading else { return }
-        isLoading = true
-        defer { isLoading = false }
+        guard !isReady else { return }
+        if let loadingTask { await loadingTask.value; return }
+        let task = Task { await loadCatalogue() }
+        loadingTask = task
+        await task.value
+        loadingTask = nil
+    }
+
+    private func loadCatalogue() async {
         do {
             // Load first: an invalid persisted store must not be overwritten with empty data.
             await settings.load()
-            guard settings.isReady else { isLoading = false; return }
+            guard settings.isReady else { return }
             let existing = Set(await registry.manifests().map(\.id))
             for source in try AppExtensionCatalogue.load() where !existing.contains(source.manifest.id) {
                 try await registry.registerBundled(manifest: source.manifest, javaScript: source.javaScript)
@@ -79,6 +85,8 @@ final class ExtensionEnvironment {
     }
 
     func adapter(for connection: SourceConnection, interaction: VerificationInteraction = .foreground) async throws -> any SourceAdapter {
+        if !isReady { await load() }
+        try Task.checkCancellation()
         guard let current = connections.first(where: { $0.id == connection.id }), current.isEnabled,
               let manifest = available.first(where: { $0.id == current.extensionID }) else {
             throw ExtensionFailure.missingExtension(connection.extensionID)

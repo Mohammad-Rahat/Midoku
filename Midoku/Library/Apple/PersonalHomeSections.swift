@@ -8,21 +8,21 @@ struct PersonalHomeSections: View {
     var body: some View {
         if !recent.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Continue reading").font(.title3.bold()).padding(.horizontal, 20)
+                Text("Pick up where you left off").font(.title3.bold()).padding(.horizontal, 20)
                 ScrollView(.horizontal) {
-                    HStack(alignment: .top, spacing: 14) {
+                    HStack(spacing: 12) {
                         ForEach(recent) { entry in
-                            if let slot = state.resumeSlot(entry, positions: settings.snapshot.progress) {
-                                NavigationLink { LibraryReaderView(entryID: entry.id, initialSlotID: slot, extensions: extensions) } label: {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        LibraryCoverView(entry: entry, extensions: extensions).frame(width: 116, height: 166).clipped().clipShape(RoundedRectangle(cornerRadius: 10))
-                                        Text(state.title(entry)).font(.subheadline.weight(.medium)).lineLimit(2).frame(width: 116, alignment: .leading)
-                                    }
+                            if let slotID = state.resumeSlot(entry, positions: settings.snapshot.progress),
+                               let slot = entry.slots.first(where: { $0.id == slotID }), let variant = slot.preferred {
+                                NavigationLink { LibraryReaderView(entryID: entry.id, initialSlotID: slotID, extensions: extensions) } label: {
+                                    ContinueReadingCard(entry: entry, variant: variant, extensions: extensions)
+                                        .containerRelativeFrame(.horizontal) { width, _ in max(1, width - 40) }
                                 }.buttonStyle(.plain)
                             }
                         }
-                    }.padding(.horizontal, 20)
-                }
+                    }.scrollTargetLayout().padding(.horizontal, 20)
+                }.scrollIndicators(.hidden).scrollTargetBehavior(.viewAligned)
+
             }
         }
         if !state.updates.isEmpty {
@@ -50,5 +50,50 @@ struct PersonalHomeSections: View {
                 Text("Open an entry to start reading. Your recent reads and newly discovered chapters will appear here.").font(.callout).foregroundStyle(MidokuTheme.secondaryText)
             }.padding(.horizontal, 20)
         }
+    }
+}
+
+private struct ContinueReadingCard: View {
+    let entry: PersonalEntry
+    let variant: ChapterVariant
+    let extensions: ExtensionEnvironment
+    @Environment(AppSettingsStore.self) private var settings
+    @Environment(\.dynamicTypeSize) private var textSize
+    private var state: LibraryState { settings.snapshot.library }
+    private var position: ReadingPosition? {
+        guard let identity = state.chapter(variant.chapterID)?.identity else { return nil }
+        return settings.snapshot.progress.first { $0.id == identity }
+    }
+    private var progress: Double {
+        guard let position else { return 0 }
+        return min(1, Double(position.pageIndex + 1) / Double(max(1, position.pageCount)))
+    }
+    private var chapterLabel: String { state.number(variant).map { "Chapter \($0)" } ?? "Chapter" }
+    private var storyTitle: String {
+        let title = state.chapterTitle(variant)
+        return title == chapterLabel ? "The story continues." : title
+    }
+    var body: some View {
+        let layout = textSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 14)) : AnyLayout(HStackLayout(alignment: .center, spacing: 16))
+        layout {
+            LibraryCoverView(entry: entry, extensions: extensions)
+                .frame(width: 84, height: 126).clipped().clipShape(RoundedRectangle(cornerRadius: 5))
+            VStack(alignment: .leading, spacing: 9) {
+                Text(state.title(entry).uppercased()).font(.caption2.weight(.bold)).foregroundStyle(.tint).lineLimit(2)
+                Text(storyTitle).font(.headline).lineLimit(2).foregroundStyle(MidokuTheme.primaryText)
+                Text(position.map { "\(chapterLabel) · \($0.pageIndex + 1) of \($0.pageCount) pages" } ?? chapterLabel)
+                    .font(.caption).foregroundStyle(MidokuTheme.secondaryText).lineLimit(2)
+                ProgressView(value: progress).tint(settings.snapshot.preferences.accent.color)
+                    .accessibilityLabel("Chapter progress")
+                HStack {
+                    Text("Continue reading").font(.caption.weight(.semibold))
+                    Spacer(minLength: 8)
+                    Image(systemName: "arrow.right").font(.subheadline)
+                }.foregroundStyle(.tint).padding(.top, 3)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+        .background(settings.snapshot.preferences.accent.color.opacity(0.09), in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .combine)
     }
 }

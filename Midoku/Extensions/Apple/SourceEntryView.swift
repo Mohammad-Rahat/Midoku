@@ -117,8 +117,8 @@ struct SourceEntryView: View {
                                 } label: {
                                     HStack(spacing: 12) {
                                         if settings.snapshot.preferences.chapterThumbnails {
-                                            SourceCoverView(url: details?.coverURL ?? summary.coverURL, adapter: adapter, extensions: extensions)
-                                                .frame(width: 48, height: 64).clipShape(RoundedRectangle(cornerRadius: 6))
+                                            ChapterCoverView(identity: SourceChapterIdentity(listing: SourceListingIdentity(connectionID: adapter.connection.id, externalID: summary.id), externalID: chapter.id), extensions: extensions)
+                                                .frame(width: 72, height: 48).clipShape(RoundedRectangle(cornerRadius: 6))
                                                 .accessibilityHidden(true)
                                         }
                                         VStack(alignment: .leading, spacing: 4) {

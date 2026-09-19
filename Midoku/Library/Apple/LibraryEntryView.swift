@@ -18,6 +18,7 @@ struct LibraryEntryView: View {
     @State private var language = "all"
     @State private var group = "all"
     @State private var expanded = false
+    @State private var renamedSlot: ChapterSlot?
     @State private var editedSlot: ChapterSlot?
     @State private var alternatives: ChapterSlot?
     @State private var message: String?
@@ -80,6 +81,7 @@ struct LibraryEntryView: View {
         .sheet(isPresented: $editing) { if let entry { EntryEditor(entry: entry, extensions: extensions) } }
         .sheet(isPresented: $sources) { EntrySourcesView(entryID: entryID, extensions: extensions) }
         .sheet(isPresented: $pasting) { PasteReviewView(entryID: entryID) }
+        .sheet(item: $renamedSlot) { slot in ChapterEditor(entryID: entryID, slotID: slot.id, renameOnly: true) }
         .sheet(item: $editedSlot) { slot in ChapterEditor(entryID: entryID, slotID: slot.id) }
         .sheet(item: $alternatives) { slot in AlternativesView(entryID: entryID, slotID: slot.id) }
         .confirmationDialog("Remove this entry?", isPresented: $removing, titleVisibility: .visible) {
@@ -141,6 +143,7 @@ struct LibraryEntryView: View {
                 else { NavigationLink { LibraryReaderView(entryID: entryID, initialSlotID: slot.id, extensions: extensions) } label: { rowLabel(slot, variant: variant, chapter: chapter, entry: entry) } }
                 Menu {
                     Button("Copy chapter", systemImage: "doc.on.doc") { copy([slot.id]) }
+                    Button("Rename chapter", systemImage: "character.cursor.ibeam") { renamedSlot = slot }
                     Button("Edit chapter", systemImage: "pencil") { editedSlot = slot }
                     Button(state.isRead(slot) ? "Mark unread" : "Mark read", systemImage: "checkmark.circle") { let read = !state.isRead(slot); change { try $0.markSlots(entryID: entryID, slots: [slot.id], read: read) } }
                     Button("Download", systemImage: "arrow.down.circle") { download([slot.id]) }
@@ -154,6 +157,7 @@ struct LibraryEntryView: View {
             }.contextMenu {
                 Button("Copy", systemImage: "doc.on.doc") { copy([slot.id]) }
                 Button("Select", systemImage: "checkmark.circle") { selecting = true; selected.insert(slot.id) }
+                Button("Rename chapter", systemImage: "character.cursor.ibeam") { renamedSlot = slot }
                 Button("Edit", systemImage: "pencil") { editedSlot = slot }
             }
         }
@@ -161,7 +165,7 @@ struct LibraryEntryView: View {
     private func rowLabel(_ slot: ChapterSlot, variant: ChapterVariant, chapter: LibraryChapter, entry: PersonalEntry) -> some View {
         HStack(spacing: 12) {
             if selecting { Image(systemName: selected.contains(slot.id) ? "checkmark.circle.fill" : "circle").foregroundStyle(.tint) }
-            if settings.snapshot.preferences.chapterThumbnails { LibraryCoverView(entry: entry, extensions: extensions, overrideID: variant.edits.coverID).frame(width: 42, height: 58).clipped().clipShape(RoundedRectangle(cornerRadius: 6)) }
+            if settings.snapshot.preferences.chapterThumbnails { ChapterCoverView(identity: chapter.identity, extensions: extensions, overrideID: variant.edits.coverID).frame(width: 72, height: 48).clipped().clipShape(RoundedRectangle(cornerRadius: 6)) }
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(state.chapterDisplayTitle(variant)).font(.subheadline.weight(.semibold))

@@ -1,3 +1,16 @@
+# Home design, library paging and cover fixes — 2026-09-19
+
+- Replaced the system floating tab bar with a solid full-width five-tab bar. Each tab retains navigation state; reader routes hide the bar.
+- Home uses the design's Continue Reading card with entry cover, chapter name, physical page progress, and a resume action.
+- Library categories support taps and horizontal paging. Settings > Library offers Standard, Compact, and Custom layouts, including portrait/landscape item counts. Existing density preferences migrate without resetting other settings; custom values survive backup/restore.
+- Bootstrap awaits the local extension registry before publishing screens. Concurrent adapter callers await the same initialization task; Home also observes readiness and supports retry after load failure.
+- Entry covers and individual chapter covers have explicit, separate write targets. Chapter lists use a custom chapter cover or a cached first-page thumbnail, never the entry cover. Visible rows resolve thumbnails through the shared source coordinator in background mode; they cannot trigger verification sheets. Offline first pages are supported. The disposable cache retains up to 300 bounded thumbnails and is excluded from backups; custom covers remain backed up.
+- Added a clear Rename chapter action for the bold chapter label, also exposed in Edit chapter. Source refresh does not overwrite that override.
+- Added regression tests for independent cover ownership across persistence/refresh, stale cover targets, old preference migration, and custom row-count backup validation. Extension typechecking, bundling, and 21 Node tests pass locally. Native tests, Release archive, and simulator screenshots run in the Xcode 27 workflow; final results are recorded in the workflow artifacts.
+- No signing/deployment settings changed. Physical-device and LiveContainer behavior must be checked with the delivered IPA.
+
+---
+
 # Development progress
 
 ## 2026-09-18 (UTC) — Personal library, chapter curation and compact headers

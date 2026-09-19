@@ -118,6 +118,7 @@ struct PasteReviewView: View {
 struct ChapterEditor: View {
     let entryID: UUID
     let slotID: UUID
+    var renameOnly = false
     @Environment(AppSettingsStore.self) private var settings
     @Environment(\.dismiss) private var dismiss
     @State private var variantID: UUID?
@@ -130,20 +131,30 @@ struct ChapterEditor: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Title", text: Binding(get: { edits.title ?? original?.title ?? "" }, set: { edits.title = $0 }))
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Chapter name").font(.caption).foregroundStyle(MidokuTheme.secondaryText)
+                        TextField("e.g. Prologue", text: Binding(get: {
+                            edits.title ?? (edits.number ?? original?.number).flatMap { $0.isEmpty ? nil : "Chapter \($0)" } ?? original?.title ?? ""
+                        }, set: { edits.title = $0 }))
+                            .accessibilityLabel("Chapter name")
+                    }
+                    if renameOnly {
+                        Button("Use source name") { edits.title = nil }
+                    } else {
                     TextField("Chapter number", text: Binding(get: { edits.number ?? original?.number ?? "" }, set: { edits.number = $0 }))
                     TextField("Volume", text: Binding(get: { edits.volume ?? original?.volume ?? "" }, set: { edits.volume = $0 }))
                     Button("Use source fields") { edits.title = nil; edits.number = nil; edits.volume = nil }
-                } footer: { Text("Edits apply to this release in this entry. The source reference and shared reading progress stay intact.") }
-                Section("Chapter cover") {
+                    }
+                } footer: { Text("Chapter name replaces the bold label in the chapter list and reader. Chapter number controls reading order. Your changes survive source refreshes.") }
+                if !renameOnly { Section("Chapter cover") {
                     CoverImportControls(data: $cover, error: $error)
-                    Button("Use entry cover") { edits.coverID = nil; cover = nil }
-                }
+                    Button("Use first page") { edits.coverID = nil; cover = nil }
+                } }
                 if let error { Text(error).foregroundStyle(.red) }
-            }.settingsStyle().navigationTitle("Edit chapter")
+            }.settingsStyle().navigationTitle(renameOnly ? "Rename chapter" : "Edit chapter")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(saving) }
-                ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.disabled(variantID == nil || saving) }
+                ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.disabled(variantID == nil || saving || (edits.title != nil && (edits.title?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true || (edits.title?.count ?? 0) > 1000))) }
             }
         }.interactiveDismissDisabled(saving)
         .task {

@@ -13,6 +13,8 @@ struct ContentView: View {
     @State private var browsePath = NavigationPath()
     @State private var historyPath = NavigationPath()
     @State private var settingsPath = NavigationPath()
+    @State private var visitedTabs: Set<MidokuTab> = [.home]
+    @State private var hiddenBars: [MidokuTab: Bool] = [:]
     @State private var initialized = false
     @State private var loadAttempt = 0
 
@@ -55,8 +57,11 @@ struct ContentView: View {
         .task(id: loadAttempt) {
             await settings.load()
             guard settings.isReady else { return }
+            // Finish the local adapter catalogue before any screen requests a feed or cover.
+            await extensions.load()
             if !initialized {
                 selectedTab = MidokuTab(rawValue: settings.snapshot.preferences.launchTab.rawValue) ?? .home
+                visitedTabs.insert(selectedTab)
                 lock.configure(enabled: settings.snapshot.preferences.appLock)
                 initialized = true
             }
@@ -64,12 +69,12 @@ struct ContentView: View {
             if CommandLine.arguments.contains("--library-preview") {
                 do {
                     let id = try await LibraryPreviewData.prepare(settings)
-                    selectedTab = CommandLine.arguments.contains("--settings-preview") ? .settings : .library
+                    selectedTab = CommandLine.arguments.contains("--home-preview") ? .home : (CommandLine.arguments.contains("--settings-preview") || CommandLine.arguments.contains("--layout-preview") ? .settings : .library)
+                    visitedTabs.insert(selectedTab)
                     if CommandLine.arguments.contains("--entry-preview"), libraryPath.isEmpty { libraryPath.append(id) }
                 } catch { settings.update { _ in throw error } }
             }
             #endif
-            await extensions.load()
             await downloads.load()
             if settings.snapshot.preferences.refreshOnLaunch { await library.refresh(automatic: true) }
         }
@@ -94,28 +99,50 @@ struct ContentView: View {
     }
 
     private var tabs: some View {
-        TabView(selection: $selectedTab) {
-            NavigationStack(path: $homePath) {
-                PinnedHomeView(extensions: extensions) { selectedTab = .browse }
-            }.tabItem { Label(MidokuTab.home.title, systemImage: MidokuTab.home.systemImage) }.tag(MidokuTab.home)
-            NavigationStack(path: $libraryPath) {
-                LibraryView(extensions: extensions) { selectedTab = .browse }
-                    .navigationDestination(for: UUID.self) { LibraryEntryView(entryID: $0, extensions: extensions) }
-            }.tabItem { Label(MidokuTab.library.title, systemImage: MidokuTab.library.systemImage) }.tag(MidokuTab.library)
-            NavigationStack(path: $browsePath) {
-                SourceDirectoryView(extensions: extensions)
-            }.tabItem { Label(MidokuTab.browse.title, systemImage: MidokuTab.browse.systemImage) }.tag(MidokuTab.browse)
-            NavigationStack(path: $historyPath) {
-                ReadingHistoryView(extensions: extensions)
-            }.tabItem { Label(MidokuTab.history.title, systemImage: MidokuTab.history.systemImage) }.tag(MidokuTab.history)
-            NavigationStack(path: $settingsPath) {
-                SettingsView(extensions: extensions)
-            }.tabItem { Label(MidokuTab.settings.title, systemImage: MidokuTab.settings.systemImage) }.tag(MidokuTab.settings)
+        ZStack {
+            ForEach(MidokuTab.allCases.filter { visitedTabs.contains($0) }) { tab in
+                tabContent(tab)
+                    .onPreferenceChange(AppTabBarHiddenPreference.self) { hiddenBars[tab] = $0 }
+                    .opacity(selectedTab == tab ? 1 : 0)
+                    .allowsHitTesting(selectedTab == tab)
+                    .accessibilityHidden(selectedTab != tab)
+                    .zIndex(selectedTab == tab ? 1 : 0)
+            }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if hiddenBars[selectedTab] != true { TraditionalTabBar(selection: $selectedTab) }
+        }
+        .onChange(of: selectedTab) { visitedTabs.insert(selectedTab) }
         .sheet(item: Binding(get: { extensions.challenges.current }, set: { value in
             if value == nil, let challenge = extensions.challenges.current { extensions.challenges.cancel(id: challenge.id) }
         }), onDismiss: { extensions.challenges.presentationDidDismiss() }) { challenge in
             SourceVerificationView(challenge: challenge, sessions: extensions.browserSessions, coordinator: extensions.challenges)
+        }
+    }
+    @ViewBuilder private func tabContent(_ tab: MidokuTab) -> some View {
+        switch tab {
+        case .home:
+            NavigationStack(path: $homePath) {
+                PinnedHomeView(extensions: extensions) { selectedTab = .browse }
+            }
+        case .library:
+            NavigationStack(path: $libraryPath) {
+                LibraryView(extensions: extensions) { selectedTab = .browse }
+                    .navigationDestination(for: UUID.self) { LibraryEntryView(entryID: $0, extensions: extensions) }
+            }
+        case .browse:
+            NavigationStack(path: $browsePath) { SourceDirectoryView(extensions: extensions) }
+        case .history:
+            NavigationStack(path: $historyPath) { ReadingHistoryView(extensions: extensions) }
+        case .settings:
+            NavigationStack(path: $settingsPath) {
+                #if DEBUG
+                if CommandLine.arguments.contains("--layout-preview") { LibrarySettingsView() }
+                else { SettingsView(extensions: extensions) }
+                #else
+                SettingsView(extensions: extensions)
+                #endif
+            }
         }
     }
 }

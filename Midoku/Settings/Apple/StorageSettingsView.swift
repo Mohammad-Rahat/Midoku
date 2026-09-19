@@ -244,7 +244,11 @@ struct OfflineChapterReader: View {
             tap: { fraction in
                 let delta = preferences.tapNavigation ? preferences.tapZones.action(at: fraction, mode: preferences.mode) : 0
                 if delta == 0 { controlsVisible.toggle() } else { jump(delta) }
-            }, loaded: { loadedPages.insert(page.id) }, imageLoader: { try await downloads.image(page: page, chapterID: download.id) },
+            }, loaded: { loadedPages.insert(page.id) }, imageLoader: {
+                let image = try await downloads.image(page: page, chapterID: download.id)
+                if index == 0 { await ChapterThumbnailCache.shared.store(image, identity: download.record.id) }
+                return image
+            },
             swipe: { jump($0) }, identity: download.record.identity)
     }
     private func jump(_ delta: Int) {

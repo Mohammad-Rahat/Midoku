@@ -171,6 +171,7 @@ struct PinnedHomeView: View {
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 24) {
+                        Text("A little discovery. A little escape.").font(.subheadline).foregroundStyle(MidokuTheme.secondaryText).padding(.horizontal, 20)
                         PersonalHomeSections(extensions: extensions)
                         ForEach(settings.snapshot.homeSections.filter(\.isVisible)) { section in
                             HomeShelf(section: section, extensions: extensions, refresh: refresh)
@@ -179,7 +180,7 @@ struct PinnedHomeView: View {
                 }.refreshable { refresh += 1 }
             }
         }
-        .background(MidokuTheme.background).navigationTitle("Home").navigationBarTitleDisplayMode(.inline)
+        .background(MidokuTheme.background).navigationTitle("Home").navigationBarTitleDisplayMode(.large)
         .toolbar {
             NavigationLink { HomeSectionsSettingsView() } label: { Label("Manage Home sections", systemImage: "slider.horizontal.3") }
         }
@@ -224,7 +225,7 @@ private struct HomeShelf: View {
                 if let error {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(error).font(.footnote).foregroundStyle(MidokuTheme.secondaryText)
-                        Button("Retry") { retry += 1 }
+                        Button("Retry") { Task { await extensions.load(); retry += 1 } }
                     }.padding(.horizontal, 20)
                 }
                 if let adapter, !items.isEmpty {
@@ -246,9 +247,14 @@ private struct HomeShelf: View {
                 }
             }
         }
-        .task(id: "\(refresh)-\(retry)-\(connection?.isEnabled == true)") {
+        .task(id: "\(refresh)-\(retry)-\(connection?.isEnabled == true)-\(extensions.isReady)") {
             guard let connection, connection.isEnabled else { loading = false; return }
-            loading = true
+            loading = true; error = nil
+            guard extensions.isReady else {
+                error = extensions.errorMessage
+                loading = error == nil
+                return
+            }
             defer { loading = false }
             do {
                 let current = try await extensions.adapter(for: connection)

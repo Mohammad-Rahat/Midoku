@@ -92,6 +92,8 @@ nonisolated struct AppPreferences: Codable, Equatable, Sendable {
     var appearance: AppAppearance = .system
     var accent: AppAccent = .forest
     var coverDensity: CoverDensity = .comfortable
+    var libraryLayout: LibraryLayoutPreferences? = nil
+    var resolvedLibraryLayout: LibraryLayoutPreferences { libraryLayout ?? LibraryLayoutPreferences(style: coverDensity == .compact ? .compact : .standard) }
     var launchTab: LaunchTab = .home
     var librarySort: LibrarySort = .recentlyAdded
     var refreshOnLaunch = true
@@ -190,6 +192,7 @@ nonisolated struct AppSnapshot: Codable, Sendable {
               preferences.reader.brightness.isFinite, (0.05...1).contains(preferences.reader.brightness) else {
             throw SettingsFailure.invalidBackup
         }
+        try preferences.resolvedLibraryLayout.validate()
         let sourceIDs = Set(connections.map(\.id))
         try library.validate(connections: sourceIDs, categories: Set(categories.map(\.id)))
         for pin in homeSections {

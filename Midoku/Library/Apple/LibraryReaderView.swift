@@ -52,6 +52,7 @@ struct LibraryReaderView: View {
                 }.labelStyle(.iconOnly).frame(minHeight: 44).padding(.horizontal, 20).background(MidokuTheme.surface)
             }
         }
+        .preference(key: AppTabBarHiddenPreference.self, value: true)
         .environment(\.readerChapterNavigation, chapterNavigation)
         .environment(\.readerCoverContext, ReaderCoverContext(entryID: entryID, slotID: slotID))
         .onPreferenceChange(ReaderControlsPreference.self) { controlsVisible = $0 }

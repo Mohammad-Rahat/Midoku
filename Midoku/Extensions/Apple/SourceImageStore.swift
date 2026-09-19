@@ -17,14 +17,14 @@ actor SourceImageStore {
     func clear() { generation = UUID(); cache.removeAllObjects() }
 
     func image(url: URL, headers: [String: String], connection: SourceConnection,
-               manifest: ExtensionManifest, maximumDimension: Int) async throws -> UIImage {
+               manifest: ExtensionManifest, maximumDimension: Int, interaction: VerificationInteraction = .foreground) async throws -> UIImage {
         let key = ([connection.id.uuidString, url.absoluteString, String(maximumDimension)] +
             headers.keys.sorted().map { "\($0)=\(headers[$0] ?? "")" }).joined(separator: "\n") as NSString
         if let image = cache.object(forKey: key) { return image }
         let token = generation
         let response = try await requests.request(
             SourceHTTPRequest(url: url, headers: headers), connection: connection,
-            manifest: manifest, interaction: .foreground, kind: .image
+            manifest: manifest, interaction: interaction, kind: .image
         )
         try Task.checkCancellation()
         let body = try ComixImageDecoder.decode(response, processor: manifest.imageProcessing)

@@ -149,8 +149,10 @@ struct SourceChapterReader: View {
 
     private func loadImage(_ page: PageResource) async throws -> UIImage {
         let current = try await extensions.adapter(for: adapter.connection)
-        return try await extensions.images.image(url: page.url, headers: page.headers,
+        let image = try await extensions.images.image(url: page.url, headers: page.headers,
             connection: current.connection, manifest: current.manifest, maximumDimension: 4096)
+        if page.id == pages.first?.id { await ChapterThumbnailCache.shared.store(image, identity: identity) }
+        return image
     }
 
     private func continuousPages(viewport: CGSize) -> some View {

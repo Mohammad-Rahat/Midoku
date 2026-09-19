@@ -40,6 +40,10 @@ jobs:
           xcrun --sdk iphoneos --show-sdk-version
           xcodebuild -list -project Midoku.xcodeproj
 
+      - name: Verify extension tooling
+        working-directory: Extensions
+        run: npm ci && npm test
+
       - name: Run Swift tests
         run: swift test
 
@@ -90,7 +94,7 @@ jobs:
           bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
           xcrun simctl install "$device_id" "$app"
           mkdir -p build/screenshots
-          for screen in library entry settings; do
+          for screen in home library entry settings layout; do
             xcrun simctl terminate "$device_id" "$bundle_id" || true
             xcrun simctl launch "$device_id" "$bundle_id" --library-preview "--$screen-preview"
             sleep 4

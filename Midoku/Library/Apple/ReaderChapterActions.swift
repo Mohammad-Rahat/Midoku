@@ -70,6 +70,19 @@ struct ReaderCoverActions: View {
         }
     }
     private func save(_ entryID: UUID, chapter: Bool) {
+        // Capture the physical release before asynchronous image processing starts.
+        let target: LibraryCoverTarget
+        if chapter {
+            guard let entry = settings.snapshot.library.entry(entryID),
+                  let slot = entry.slots.first(where: { slot in
+                      (context.slotID == nil || slot.id == context.slotID) && slot.variants.contains {
+                          settings.snapshot.library.chapter($0.chapterID)?.identity == identity
+                      }
+                  }), let variant = slot.variants.first(where: { settings.snapshot.library.chapter($0.chapterID)?.identity == identity }) else {
+                error = LibraryFailure.stalePreview.localizedDescription; return
+            }
+            target = .chapter(entryID: entryID, slotID: slot.id, variantID: variant.id)
+        } else { target = .entry(entryID) }
         Task {
             do {
                 // Downsample before JPEG encoding so tall reader pages remain bounded.
@@ -81,16 +94,7 @@ struct ReaderCoverActions: View {
                 guard let bytes = resized.jpegData(compressionQuality: 0.75) else { throw LibraryFailure.cover }
                 let cover = try LibraryCover(data: CoverImportControls.normalized(bytes))
                 try await settings.commit { state in
-                    let chapterIDs = Set(state.library.chapters.filter { $0.identity == identity }.map(\.id))
-                    try state.library.editEntry(entryID) { entry in
-                        if chapter {
-                            guard let slot = entry.slots.firstIndex(where: { slot in
-                                (context.slotID == nil || slot.id == context.slotID) && slot.variants.contains { chapterIDs.contains($0.chapterID) }
-                            }), let variant = entry.slots[slot].variants.firstIndex(where: { chapterIDs.contains($0.chapterID) }) else { throw LibraryFailure.stalePreview }
-                            entry.slots[slot].variants[variant].edits.coverID = cover.id
-                        } else { entry.coverID = cover.id; entry.hidesCover = false }
-                    }
-                    state.library.covers.append(cover)
+                    try state.library.setCover(cover, for: target)
                 }
             } catch { self.error = error.localizedDescription }
         }
@@ -101,7 +105,7 @@ struct ReaderCoverActions: View {
 struct ReaderBackGesture: ViewModifier {
     @Environment(\.dismiss) private var dismiss
     func body(content: Content) -> some View {
-        content.overlay(alignment: .leading) {
+        content.preference(key: AppTabBarHiddenPreference.self, value: true).overlay(alignment: .leading) {
             Color.clear.frame(width: 22).contentShape(Rectangle())
                 .gesture(DragGesture(minimumDistance: 18).onEnded { value in
                     guard value.translation.width > 65, value.translation.width > abs(value.translation.height) * 1.5 else { return }

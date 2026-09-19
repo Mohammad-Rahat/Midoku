@@ -24,7 +24,9 @@ struct LibraryView: View {
     @AppStorage("libraryListLayout") private var listLayout = false
 
     private var state: LibraryState { settings.snapshot.library }
-    private var visible: [PersonalEntry] {
+    private var categoryIDs: [String] { ["all", "uncategorized"] + settings.snapshot.categories.map { $0.id.uuidString } }
+    private var visible: [PersonalEntry] { visible(in: category) }
+    private func visible(in category: String) -> [PersonalEntry] {
         let downloaded = Set(downloads.items.filter { $0.status == .completed }.map { $0.record.id })
         return state.entries.filter { entry in
             (query.isEmpty || state.title(entry).localizedStandardContains(query)) &&
@@ -44,6 +46,7 @@ struct LibraryView: View {
     }
 
     var body: some View {
+        GeometryReader { geometry in
         VStack(spacing: 0) {
             if !state.entries.isEmpty {
                 HStack {
@@ -52,30 +55,30 @@ struct LibraryView: View {
                     if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Clear search") }
                     filterMenu
                 }.padding(12).background(MidokuTheme.surface, in: RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 16).padding(.vertical, 8)
-                Picker("Category", selection: $category) {
-                    Text("All · \(state.entries.count)").tag("all")
-                    Text("Uncategorized").tag("uncategorized")
-                    ForEach(settings.snapshot.categories) { Text($0.name).tag($0.id.uuidString) }
-                }.pickerStyle(.menu).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16)
+                categoryTabs
+                HStack {
+                    Menu {
+                        Picker("Sort", selection: settings.binding(\.librarySort)) {
+                            ForEach(LibrarySort.allCases) { Text($0.title).tag($0) }
+                        }
+                    } label: { Label(settings.snapshot.preferences.librarySort.title, systemImage: "chevron.down").font(.caption) }
+                    Spacer()
+                    NavigationLink { LibrarySettingsView() } label: { Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44) }
+                        .accessibilityLabel("Library layout and settings")
+                }.foregroundStyle(MidokuTheme.secondaryText).padding(.horizontal, 16)
             }
             if state.entries.isEmpty {
                 MidokuEmptyStateView(kind: .library, action: browse)
-            } else if visible.isEmpty {
-                ContentUnavailableView.search(text: query)
-                Button("Reset filters") { query = ""; category = "all"; status = nil; sourceID = nil; publication = "all"; unreadOnly = false; downloadedOnly = false }.padding()
             } else {
-                ScrollView {
-                    if listLayout || textSize.isAccessibilitySize {
-                        LazyVStack(spacing: 12) { ForEach(visible) { entry in entryLink(entry, compact: true) } }.padding(16)
-                    } else {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: settings.snapshot.preferences.coverDensity.minimumWidth), spacing: 14)], alignment: .leading, spacing: 20) {
-                            ForEach(visible) { entry in entryLink(entry, compact: false) }
-                        }.padding(16)
+                TabView(selection: $category) {
+                    ForEach(categoryIDs, id: \.self) { id in
+                        categoryPage(id, landscape: geometry.size.width > geometry.size.height).tag(id)
                     }
-                }.refreshable { await library.refresh() }
+                }.tabViewStyle(.page(indexDisplayMode: .never))
             }
             if library.refreshing { ProgressView("Refreshing library…").font(.caption).padding(8) }
             if let message = message ?? library.refreshMessage { Text(message).font(.caption).foregroundStyle(MidokuTheme.secondaryText).padding(.horizontal, 16) }
+        }
         }
         .background(MidokuTheme.background).navigationTitle(selecting ? "\(selected.count) selected" : "Library").navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -116,6 +119,50 @@ struct LibraryView: View {
         .onChange(of: settings.snapshot.categories) { if category != "all", category != "uncategorized", !settings.snapshot.categories.contains(where: { $0.id.uuidString == category }) { category = "all" } }
     }
 
+    private var categoryTabs: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(categoryIDs, id: \.self) { id in
+                        Button { category = id } label: {
+                            Text(categoryTitle(id)).font(.subheadline.weight(category == id ? .semibold : .regular))
+                                .padding(.horizontal, 16).padding(.vertical, 9)
+                                .foregroundStyle(category == id ? MidokuTheme.onAccent : MidokuTheme.secondaryText)
+                                .background(category == id ? settings.snapshot.preferences.accent.fill : MidokuTheme.elevated, in: Capsule())
+                                .frame(minHeight: 44)
+                        }.buttonStyle(.plain).id(id)
+                            .accessibilityAddTraits(category == id ? .isSelected : [])
+                    }
+                }.padding(.horizontal, 16)
+            }.scrollIndicators(.hidden)
+                .onChange(of: category) { proxy.scrollTo(category, anchor: .center) }
+        }
+    }
+    private func categoryTitle(_ id: String) -> String {
+        if id == "all" { return "All" }
+        if id == "uncategorized" { return "Uncategorized" }
+        return settings.snapshot.categories.first { $0.id.uuidString == id }?.name ?? "Category"
+    }
+    private func categoryPage(_ id: String, landscape: Bool) -> some View {
+        let entries = visible(in: id)
+        let count = settings.snapshot.preferences.resolvedLibraryLayout.columns(landscape: landscape)
+        return ScrollView {
+            if entries.isEmpty {
+                VStack(spacing: 12) {
+                    ContentUnavailableView(query.isEmpty ? "No entries here" : "No matches", systemImage: "books.vertical",
+                        description: Text(query.isEmpty ? "Add entries to this category or adjust your filters." : "Try another title or adjust your filters."))
+                    Button("Reset filters") { query = ""; status = nil; sourceID = nil; publication = "all"; unreadOnly = false; downloadedOnly = false }
+                }.padding(.top, 32)
+            } else if listLayout || textSize.isAccessibilitySize {
+                LazyVStack(spacing: 12) { ForEach(entries) { entry in entryLink(entry, compact: true) } }.padding(16)
+            } else {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: count), alignment: .leading, spacing: 20) {
+                    ForEach(entries) { entry in entryLink(entry, compact: false) }
+                }.padding(16)
+            }
+        }.refreshable { await library.refresh() }
+    }
+
     private var filterMenu: some View {
         Menu {
             Toggle("Unread only", isOn: $unreadOnly)
@@ -137,7 +184,8 @@ struct LibraryView: View {
         let layout = compact ? AnyLayout(HStackLayout(alignment: .center, spacing: 14)) : AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
         return layout {
             LibraryCoverView(entry: entry, extensions: extensions)
-                .frame(width: compact ? 64 : nil, height: compact ? 90 : 190).frame(maxWidth: compact ? nil : .infinity)
+                .aspectRatio(2.0 / 3.0, contentMode: .fit)
+                .frame(width: compact ? 64 : nil).frame(maxWidth: compact ? nil : .infinity)
                 .clipped().clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(alignment: .topTrailing) {
                     if selecting { Image(systemName: selected.contains(entry.id) ? "checkmark.circle.fill" : "circle").font(.title2).foregroundStyle(.white, .green).padding(6) }
@@ -160,18 +208,17 @@ struct LibraryView: View {
 struct LibraryCoverView: View {
     let entry: PersonalEntry
     let extensions: ExtensionEnvironment
-    var overrideID: UUID? = nil
     @Environment(AppSettingsStore.self) private var settings
     @State private var adapter: (any SourceAdapter)?
     private var listing: LibraryListing? { settings.snapshot.library.listing(entry.primaryListingID) }
     var body: some View {
         Group {
-            if let id = overrideID ?? entry.coverID, let data = settings.snapshot.library.covers.first(where: { $0.id == id })?.data, let image = UIImage(data: data) {
+            if let id = entry.coverID, let data = settings.snapshot.library.covers.first(where: { $0.id == id })?.data, let image = UIImage(data: data) {
                 Image(uiImage: image).resizable().scaledToFill()
             } else if !entry.hidesCover, let adapter {
                 SourceCoverView(url: listing?.details.coverURL, adapter: adapter, extensions: extensions)
             } else { Image("MidokuCoverPlaceholder").resizable().scaledToFit().background(MidokuTheme.elevated) }
-        }.accessibilityHidden(true).task(id: listing?.id) {
+        }.accessibilityHidden(true).task(id: "\(listing?.id.uuidString ?? "none")-\(extensions.isReady)") {
             guard let listing, let connection = extensions.connections.first(where: { $0.id == listing.identity.connectionID }) else { adapter = nil; return }
             adapter = try? await extensions.adapter(for: connection)
         }

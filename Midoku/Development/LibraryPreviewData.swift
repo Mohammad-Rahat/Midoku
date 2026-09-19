@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import UIKit
 
 /// Opt-in simulator screenshots use a separate store; production builds contain no seeded library.
 @MainActor
@@ -22,7 +23,19 @@ enum LibraryPreviewData {
                 try state.library.paste(entryID: id, revision: 0, choices: state.library.pastePreview(entryID: id))
             }
             try state.markSlots(entryID: id, slots: Set(state.library.entry(id)?.slots.prefix(1).map(\.id) ?? []), read: true)
-            try state.library.editEntry(id) { $0.status = .reading }
+            try state.library.editEntry(id) { $0.status = .reading; $0.lastReadAt = .now }
+            if let resume = state.library.entry(id)?.slots.dropFirst().first?.preferred.flatMap({ state.library.chapter($0.chapterID) }) {
+                state.progress.append(ReadingPosition(identity: resume.identity, pageID: "preview-page", pageIndex: 11, pageCount: 19, fraction: 0, updatedAt: .now))
+            }
+            state.preferences.libraryLayout = LibraryLayoutPreferences(style: .custom, portraitColumns: 3, landscapeColumns: 5)
+            let planned = LibraryCategory(name: "Planned"); state.categories.append(planned)
+            let complete = LibraryCategory(name: "Completed"); state.categories.append(complete)
+            for title in ["The last lantern", "Blue afternoon", "A long way home", "Paper moons"] {
+                _ = try state.library.createManual(title: title, categories: [planned.id])
+            }
+            if let data = UIImage(named: "MidokuArtwork")?.jpegData(compressionQuality: 0.7) {
+                try state.library.setCover(LibraryCover(data: data), for: .entry(id))
+            }
             _ = try state.library.createManual(title: "Weekend collection", description: "A place for chapters you choose.")
         }
         guard let firstID else { throw LibraryFailure.missing }

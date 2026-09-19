@@ -156,10 +156,11 @@ struct AppearanceSettingsView: View {
                 }.padding(.vertical, 8)
             }.listRowBackground(MidokuTheme.surface)
             Section {
-                SettingPicker(title: "Cover density", selection: settings.binding(\.coverDensity))
+                SettingPicker(title: "Browse cover density", selection: settings.binding(\.coverDensity))
+                NavigationLink("Library layout") { LibrarySettingsView() }
                 SettingPicker(title: "Open on launch", selection: settings.binding(\.launchTab))
             } header: { Text("Layout") } footer: {
-                Text("Cover density applies to manga grids. Larger accessibility text keeps covers and labels comfortably spaced. Your launch tab is used the next time Midoku opens.")
+                Text("Browse cover density applies to source grids. Library has its own layout settings. Larger accessibility text keeps covers and labels comfortably spaced. Your launch tab is used the next time Midoku opens.")
             }.listRowBackground(MidokuTheme.surface)
             Section("Preview") {
                 HStack(spacing: 12) {
@@ -179,6 +180,7 @@ struct LibrarySettingsView: View {
     @Environment(AppSettingsStore.self) private var settings
     var body: some View {
         Form {
+            LibraryLayoutSection()
             Section {
                 NavigationLink { CategoriesSettingsView() } label: {
                     SettingLabel(title: "Categories", symbol: "folder", detail: "\(settings.snapshot.categories.count) categories")
@@ -193,7 +195,7 @@ struct LibrarySettingsView: View {
             Section {
                 Toggle("Show chapter thumbnails", isOn: settings.binding(\.chapterThumbnails))
             } header: { Text("Chapter lists") } footer: {
-                Text("Use the manga cover beside chapters. Midoku never loads every chapter's pages to generate previews.")
+                Text("Chapter thumbnails use the first page, or your custom chapter cover. Previews load as chapters become visible and are cached on this device.")
             }.listRowBackground(MidokuTheme.surface)
         }.settingsStyle().navigationTitle("Library")
     }
