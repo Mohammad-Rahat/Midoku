@@ -317,23 +317,9 @@ extension MangaCollectionViewController {
                     image: UIImage(systemName: "plus.circle")
                 ) { _ in
                     Task {
-                        if await MangaManager.shouldAskForCategories() {
-                            // open category select view
-                            let viewController = UINavigationController(rootViewController: CategorySelectViewController(manga: entry))
-                            self.present(viewController, animated: true)
-                        } else {
-                            // add bookmark icon
-                            self.bookmarkedItems.insert(entry.key)
-                            var snapshot = self.dataSource.snapshot()
-                            snapshot.reloadItems([entry])
-                            await self.dataSource.apply(snapshot)
-
-                            // add to library
-                            await MangaManager.shared.addToLibrary(
-                                manga: entry,
-                                fetchMangaDetails: true
-                            )
-                        }
+                        let source = await SourceManager.shared.source(for: entry.sourceKey)
+                        let manga = (try? await source?.getMangaUpdate(manga: entry, needsDetails: true, needsChapters: true)) ?? entry
+                        self.present(UIHostingController(rootView: MCAddSourceView(manga: manga, chapters: manga.chapters ?? [])), animated: true)
                     }
                 })
             }

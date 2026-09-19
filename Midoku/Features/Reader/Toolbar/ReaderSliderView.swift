@@ -50,14 +50,14 @@ class ReaderSliderView: UIControl {
         let trackView = UIView()
         trackView.backgroundColor = .secondarySystemFill
         trackView.layer.cornerRadius = 1.5
-        trackView.isUserInteractionEnabled = true
+        trackView.isUserInteractionEnabled = false
         return trackView
     }()
     private lazy var progressedTrackView = {
         let progressedTrackView = UIView()
         progressedTrackView.backgroundColor = tintColor
         progressedTrackView.layer.cornerRadius = 1.5
-        progressedTrackView.isUserInteractionEnabled = true
+        progressedTrackView.isUserInteractionEnabled = false
         return progressedTrackView
     }()
     private lazy var thumbView = {
@@ -93,7 +93,6 @@ class ReaderSliderView: UIControl {
     private var trackPositionConstraint: NSLayoutConstraint?
     private var thumbPositionConstraint: NSLayoutConstraint?
 
-    private var previousLocation = CGPoint()
 
     override var frame: CGRect {
         didSet {
@@ -112,6 +111,9 @@ class ReaderSliderView: UIControl {
     }
 
     func configure() {
+        isAccessibilityElement = true
+        accessibilityLabel = "Page"
+        accessibilityTraits = .adjustable
         thumbView.addSubview(grabberView)
 
         addSubview(trackView)
@@ -153,6 +155,7 @@ class ReaderSliderView: UIControl {
     }
 
     override func layoutSubviews() {
+        super.layoutSubviews()
         updateLayerFrames()
     }
 
@@ -167,56 +170,49 @@ class ReaderSliderView: UIControl {
             trackWidthConstraint?.constant = position - trackView.frame.origin.x
             thumbPositionConstraint?.constant =  position - thumbView.bounds.width / 2
         } else {
-            trackWidthConstraint?.constant = trackView.bounds.width - position - trackView.frame.origin.x
-            thumbPositionConstraint?.constant =  position - trackView.bounds.width + thumbView.bounds.width / 2
+            trackWidthConstraint?.constant = trackView.frame.maxX - position
+            thumbPositionConstraint?.constant = position - bounds.width + thumbView.bounds.width / 2
         }
     }
 }
 
 extension ReaderSliderView {
     override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
-        previousLocation = touch.location(in: self)
-
-        if thumbView.frame.contains(previousLocation) {
-            thumbView.tag = 1
-            UIView.animate(withDuration: 0.2, delay: 0, options: .curveEaseInOut) {
-                self.grabberView.transform = CGAffineTransform(scaleX: 3/2, y: 3/2)
-                if #available(iOS 26.0, *) {
-                    (self.grabberView as? LiquidLensView)?.setLifted(true, animated: true)
-                }
+        guard isEnabled else { return false }
+        thumbView.tag = 1
+        seek(to: touch.location(in: self))
+        UIView.animate(withDuration: 0.2) {
+            self.grabberView.transform = CGAffineTransform(scaleX: 1.5, y: 1.5)
+            if #available(iOS 26.0, *) {
+                (self.grabberView as? LiquidLensView)?.setLifted(true, animated: true)
             }
-            return true
         }
-
-        return false
+        return true
     }
 
     override func continueTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
-        let location = touch.location(in: self)
-
-        let deltaLocation = location.x - previousLocation.x
-        let deltaValue = (maximumValue - minimumValue) * deltaLocation / bounds.width
-
-        previousLocation = location
-
-        if thumbView.tag == 1 {
-            if direction == .forward {
-                currentValue += deltaValue
-            } else {
-                currentValue -= deltaValue
-            }
-        }
-
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-
-        updateLayerFrames()
-
-        CATransaction.commit()
-
-        sendActions(for: .valueChanged)
-
+        seek(to: touch.location(in: self))
         return true
+    }
+
+    func value(at point: CGPoint) -> CGFloat {
+        let width = max(1, bounds.width - 10)
+        let fraction = min(1, max(0, (point.x - 5) / width))
+        let directed = direction == .forward ? fraction : 1 - fraction
+        return minimumValue + directed * (maximumValue - minimumValue)
+    }
+
+    private func seek(to point: CGPoint) {
+        currentValue = value(at: point)
+        sendActions(for: .valueChanged)
+    }
+
+    override func accessibilityIncrement() { adjustAccessibility(by: 0.05) }
+    override func accessibilityDecrement() { adjustAccessibility(by: -0.05) }
+    private func adjustAccessibility(by fraction: CGFloat) {
+        currentValue += fraction * (maximumValue - minimumValue)
+        sendActions(for: .valueChanged)
+        sendActions(for: .editingDidEnd)
     }
 
     override func endTracking(_ touch: UITouch?, with event: UIEvent?) {
@@ -241,11 +237,9 @@ extension ReaderSliderView {
     }
 
     private func positionForValue(_ value: CGFloat) -> CGFloat {
-        if direction == .forward {
-            trackView.bounds.width * value + trackView.frame.origin.x
-        } else {
-            trackView.bounds.width - (trackView.bounds.width * value) - trackView.frame.origin.x
-        }
+        let range = maximumValue - minimumValue
+        let fraction = range > 0 ? (value - minimumValue) / range : 0
+        return trackView.frame.minX + trackView.bounds.width * (direction == .forward ? fraction : 1 - fraction)
     }
 
     private func boundValue(_ value: CGFloat, toLowerValue lowerValue: CGFloat, upperValue: CGFloat) -> CGFloat {

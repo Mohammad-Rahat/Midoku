@@ -244,9 +244,12 @@ class ReaderViewController: BaseObservingViewController {
         // toolbar view
         toolbarView.sliderView.addTarget(self, action: #selector(sliderMoved(_:)), for: .valueChanged)
         toolbarView.sliderView.addTarget(self, action: #selector(sliderStopped(_:)), for: .editingDidEnd)
+        toolbarView.previousChapterButton.addTarget(self, action: #selector(previousChapter), for: .touchUpInside)
+        toolbarView.nextChapterButton.addTarget(self, action: #selector(nextChapter), for: .touchUpInside)
+        updateChapterButtons()
         toolbarView.translatesAutoresizingMaskIntoConstraints = false
         let toolbarButtonItemView = UIBarButtonItem(customView: toolbarView)
-        toolbarButtonItemView.customView?.heightAnchor.constraint(equalToConstant: 40).isActive = true
+        toolbarButtonItemView.customView?.heightAnchor.constraint(equalToConstant: 44).isActive = true
         if #available(iOS 26.0, *) {
             toolbarViewWidthConstraint = toolbarButtonItemView.customView?.widthAnchor.constraint(
                 equalToConstant: node.bounds.width - 32 - 10
@@ -569,6 +572,7 @@ extension ReaderViewController {
             needsChapters: true
         )
         chapterList = updatedManga?.chapters ?? []
+        updateChapterButtons()
     }
 
     func loadCurrentChapter() {
@@ -984,6 +988,10 @@ extension ReaderViewController: @MainActor ReaderHoldingDelegate {
     }
 
     func getNextChapter() -> AidokuRunner.Chapter? {
+        nextChapter(markingDuplicates: true)
+    }
+
+    private func nextChapter(markingDuplicates: Bool) -> AidokuRunner.Chapter? {
         if let collectionSequence { return collectionSequence.adjacent(to: chapter, offset: 1) }
         guard
             var index = chapterList.firstIndex(of: chapter)
@@ -1010,7 +1018,7 @@ extension ReaderViewController: @MainActor ReaderHoldingDelegate {
                 if nextChapterInList == nil {
                     nextChapterInList = new
                 }
-                if markDuplicates && isDuplicate {
+                if markingDuplicates && markDuplicates && isDuplicate {
                     chaptersToMark.append(new)
                 }
                 if !isDuplicate {
@@ -1025,6 +1033,10 @@ extension ReaderViewController: @MainActor ReaderHoldingDelegate {
     }
 
     func getPreviousChapter() -> AidokuRunner.Chapter? {
+        previousChapter(markingDuplicates: true)
+    }
+
+    private func previousChapter(markingDuplicates: Bool) -> AidokuRunner.Chapter? {
         if let collectionSequence { return collectionSequence.adjacent(to: chapter, offset: -1) }
         guard
             var index = chapterList.firstIndex(of: chapter)
@@ -1047,7 +1059,7 @@ extension ReaderViewController: @MainActor ReaderHoldingDelegate {
                 if !isDuplicate {
                     return findBestChapterMatch(from: index, step: 1)
                 }
-                if markDuplicates {
+                if markingDuplicates && markDuplicates {
                     chaptersToMark.append(new)
                 }
             }
@@ -1071,11 +1083,17 @@ extension ReaderViewController: @MainActor ReaderHoldingDelegate {
         }
 
         self.chapter = chapter
+        updateChapterButtons()
         self.chaptersToMark = [chapter]
         configureBarToggleTapGestures()
         configureDictionaryLookupGesture()
         configureDictionaryOverlayInteractionMode()
         loadNavbarTitle()
+    }
+
+    private func updateChapterButtons() {
+        toolbarView.previousChapterButton.isEnabled = previousChapter(markingDuplicates: false) != nil
+        toolbarView.nextChapterButton.isEnabled = nextChapter(markingDuplicates: false) != nil
     }
 
     func setCurrentPage(_ page: Int, position: Double? = nil) {

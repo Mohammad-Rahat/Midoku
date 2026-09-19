@@ -1,6 +1,7 @@
 import AidokuRunner
 import Foundation
 import Testing
+import UIKit
 @testable import Midoku
 
 @MainActor
@@ -61,7 +62,7 @@ struct CollectionIntegrationTests {
         let next = try #require(sequence.adjacent(to: sequence.chapters[0], offset: 1))
         #expect(sequence.route(next)?.identifier.sourceKey == "source-b")
         #expect(sequence.route(next)?.identifier.chapterKey == "same-chapter")
-        #expect(reloaded.library.clipboard.count == 1)
+        #expect(reloaded.library.clipboard.isEmpty)
         try reloaded.snapshot.validate()
     }
 
@@ -89,6 +90,86 @@ struct CollectionIntegrationTests {
         try store.restore(before)
         #expect(store.library.title(try #require(store.library.entries.first)) == "Keep me")
     }
+    @Test func addDetailsAndReaderCoversSurviveRestartWithoutChangingSource() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = root.appendingPathComponent("collection.json")
+        let store = MCCollectionStore(fileURL: file)
+        let a = AidokuRunner.Manga(sourceKey: "cover-a", key: "same", title: "Original A", description: "Source summary")
+        let b = AidokuRunner.Manga(sourceKey: "cover-b", key: "same", title: "Original B")
+        let entry = try store.add(a, chapters: [.init(key: "shared", chapterNumber: 1)], title: "Edited on add", description: "My summary", author: "My author")
+        let other = try store.add(b, chapters: [.init(key: "shared", chapterNumber: 2)])
+        store.copy(manga: b, chapters: [.init(key: "shared", chapterNumber: 2)])
+        try store.change { state in try state.library.paste(entryID: entry, revision: 0, choices: state.library.pastePreview(entryID: entry)) }
+        let personal = try #require(store.library.entry(entry))
+        let slot = try #require(personal.slots.last)
+        let variant = try #require(slot.preferred)
+        let target = try #require(store.coverTarget(identifier: .init(sourceKey: b.sourceKey, mangaKey: b.key, chapterKey: "shared"), entryID: entry, variantID: variant.id))
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 20, height: 30)).image { context in
+            UIColor.red.setFill(); context.fill(CGRect(x: 0, y: 0, width: 20, height: 30))
+        }
+        let data = try #require(image.pngData())
+        try store.setCover(data: data, target: target, forEntry: false)
+        try store.setCover(data: data, target: target, forEntry: true)
+        let reloaded = MCCollectionStore(fileURL: file)
+        let edited = try #require(reloaded.library.entry(entry))
+        #expect(reloaded.library.title(edited) == "Edited on add")
+        #expect(reloaded.library.description(edited) == "My summary")
+        #expect(edited.authorOverride == "My author")
+        #expect(edited.coverID != nil)
+        #expect(edited.slots.last?.preferred?.edits.coverID != nil)
+        #expect(edited.slots.first?.preferred?.edits.coverID == nil)
+        #expect(reloaded.library.entry(other)?.coverID == nil)
+        #expect(reloaded.library.entry(other)?.slots.first?.preferred?.edits.coverID == nil)
+        #expect(reloaded.snapshot.manga.first { $0.listingID == edited.primaryListingID }?.manga.title == "Original A")
+        try reloaded.change { try $0.library.resetChapterDetails(entryID: entry, slotID: slot.id) }
+        #expect(reloaded.library.entry(entry)?.coverID != nil)
+        try reloaded.change { try $0.library.removeSlots(entryID: entry, slotIDs: [slot.id]) }
+        let count = reloaded.library.covers.count
+        #expect(throws: (any Error).self) { try reloaded.setCover(data: data, target: target, forEntry: false) }
+        #expect(reloaded.library.covers.count == count)
+    }
+
+    @Test func sliderTapsRespectDirectionBoundsAndCustomRange() {
+        let slider = ReaderSliderView(frame: CGRect(x: 0, y: 0, width: 210, height: 32))
+        slider.layoutIfNeeded()
+        #expect(slider.value(at: CGPoint(x: 5, y: 16)) == 0)
+        #expect(slider.value(at: CGPoint(x: 205, y: 16)) == 1)
+        #expect(abs(slider.value(at: CGPoint(x: 55, y: 16)) - 0.25) < 0.001)
+        slider.direction = .backward
+        #expect(slider.value(at: CGPoint(x: 5, y: 16)) == 1)
+        #expect(slider.value(at: CGPoint(x: 205, y: 16)) == 0)
+        #expect(abs(slider.value(at: CGPoint(x: 55, y: 16)) - 0.75) < 0.001)
+        slider.minimumValue = 2; slider.maximumValue = 6
+        #expect(slider.value(at: CGPoint(x: 105, y: 16)) == 4)
+        #expect(slider.value(at: CGPoint(x: -100, y: 16)) == 6)
+        #expect(slider.value(at: CGPoint(x: 999, y: 16)) == 2)
+        let toolbar = ReaderToolbarView()
+        toolbar.frame = CGRect(x: 0, y: 0, width: 340, height: 44)
+        toolbar.layoutIfNeeded()
+        #expect(toolbar.hitTest(toolbar.sliderView.center, with: nil) === toolbar.sliderView)
+        #expect(toolbar.previousChapterButton.frame.maxX <= toolbar.sliderView.frame.minX)
+        #expect(toolbar.nextChapterButton.frame.minX >= toolbar.sliderView.frame.maxX)
+    }
+
+    @Test func failedPasteSaveKeepsClipboardAndEntryUnchanged() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = root.appendingPathComponent("collection.json")
+        let store = MCCollectionStore(fileURL: file)
+        let manga = AidokuRunner.Manga(sourceKey: "paste", key: "book", title: "Title")
+        let entry = try store.add(manga, chapters: [.init(key: "one", chapterNumber: 1)])
+        store.copy(manga: manga, chapters: [.init(key: "two", chapterNumber: 2)])
+        let choices = try store.library.pastePreview(entryID: entry)
+        try FileManager.default.removeItem(at: file)
+        try FileManager.default.createDirectory(at: file, withIntermediateDirectories: true)
+        #expect(throws: (any Error).self) {
+            try store.change { try $0.library.paste(entryID: entry, revision: 0, choices: choices) }
+        }
+        #expect(store.library.clipboard.count == 1)
+        #expect(store.library.entry(entry)?.slots.count == 1)
+    }
+
 }
 
 private struct MCPageRoutingRunner: AidokuRunner.Runner {

@@ -8,6 +8,10 @@ enum MCCollectionPreview {
     static var entryID: UUID?
     static func prepare() {
         guard ProcessInfo.processInfo.arguments.contains("--collection-preview") else { return }
+        let args = ProcessInfo.processInfo.arguments
+        AppSettings.appearance.layout.set(args.contains("--compact-preview") ? .compact : .standard)
+        UserDefaults.standard.set(true, forKey: "Midoku.collectionGrid")
+        UserDefaults.standard.set(false, forKey: "Midoku.chapterGrid")
         let store = MCCollectionStore.shared
         do {
             try store.change { $0 = MCCollectionSnapshot() }
@@ -20,6 +24,7 @@ enum MCCollectionPreview {
                 try state.library.paste(entryID: id, revision: 0, choices: state.library.pastePreview(entryID: id))
                 let category = MCCategory(name: "Reading")
                 state.categories = [category, MCCategory(name: "Favorites")]
+                state.legacyCategoriesImported = true
                 try state.library.editEntry(id) { $0.categoryIDs = [category.id] }
                 if let data = UIImage(named: "MidokuArtwork")?.jpegData(compressionQuality: 0.6) {
                     let cover = MCLibraryCover(data: data); state.library.covers.append(cover)
@@ -31,9 +36,34 @@ enum MCCollectionPreview {
                 for i in state.connections.indices { state.connections[i].name = i == 0 ? "Source A" : "Source B" }
                 let other = try state.library.createManual(title: "Weekend reading", description: "Your next collection starts here.")
                 if let cover = state.library.covers.first { try state.library.editEntry(other) { $0.coverID = cover.id } }
+                _ = try state.library.createManual(title: "Stories for later")
+            }
+            if args.contains("--paste-preview") {
+                store.copy(manga: b, chapters: [.init(key: "c25", title: "A new beginning", chapterNumber: 25)])
             }
             entryID = id
         } catch { store.error = error.localizedDescription }
+    }
+
+    static func installReaderSources() async {
+        await SourceManager.shared.waitForSourcesLoad()
+        var sources = SourceStore.shared.sourcesByKey
+        for key in ["preview.a", "preview.b"] {
+            sources[key] = AidokuRunner.Source(url: nil, key: key, name: key, version: 1, languages: ["en"], contentRating: .safe, runner: MCPreviewRunner())
+        }
+        SourceStore.shared.update(sourcesByKey: sources, disabledSourceKeys: SourceStore.shared.disabledSourceKeys)
+    }
+}
+
+private struct MCPreviewRunner: AidokuRunner.Runner {
+    let features = AidokuRunner.SourceFeatures()
+    func getSearchMangaList(query: String?, page: Int, filters: [AidokuRunner.FilterValue]) async throws -> AidokuRunner.MangaPageResult { .init(entries: [], hasNextPage: false) }
+    func getMangaUpdate(manga: AidokuRunner.Manga, needsDetails: Bool, needsChapters: Bool) async throws -> AidokuRunner.Manga { manga }
+    func getPageList(manga: AidokuRunner.Manga, chapter: AidokuRunner.Chapter) async throws -> [AidokuRunner.Page] {
+        await MainActor.run {
+            guard let image = UIImage(named: "MidokuArtwork") else { return [] }
+            return (0..<8).map { _ in .init(content: .image(image)) }
+        }
     }
 }
 #endif

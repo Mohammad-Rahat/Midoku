@@ -25,6 +25,8 @@ class ReaderToolbarView: UIView {
     }
 
     let sliderView = ReaderSliderView()
+    let previousChapterButton = UIButton(type: .system)
+    let nextChapterButton = UIButton(type: .system)
     private let incognitoModeLabel = UILabel()
     private let currentPageLabel = UILabel()
     private let pagesLeftLabel = UILabel()
@@ -43,6 +45,12 @@ class ReaderToolbarView: UIView {
     }
 
     func configure() {
+        previousChapterButton.setImage(UIImage(systemName: "chevron.left"), for: .normal)
+        previousChapterButton.accessibilityLabel = "Previous chapter"
+        nextChapterButton.setImage(UIImage(systemName: "chevron.right"), for: .normal)
+        nextChapterButton.accessibilityLabel = "Next chapter"
+        addSubview(previousChapterButton)
+        addSubview(nextChapterButton)
         incognitoModeLabel.font = .systemFont(ofSize: 10)
         incognitoModeLabel.textColor = .secondaryLabel
         incognitoModeLabel.textAlignment = .left
@@ -68,21 +76,31 @@ class ReaderToolbarView: UIView {
         currentPageLabel.translatesAutoresizingMaskIntoConstraints = false
         pagesLeftLabel.translatesAutoresizingMaskIntoConstraints = false
         sliderView.translatesAutoresizingMaskIntoConstraints = false
+        previousChapterButton.translatesAutoresizingMaskIntoConstraints = false
+        nextChapterButton.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
-            incognitoModeLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            incognitoModeLabel.leadingAnchor.constraint(equalTo: sliderView.leadingAnchor),
             incognitoModeLabel.bottomAnchor.constraint(equalTo: bottomAnchor),
 
             currentPageLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
             currentPageLabel.bottomAnchor.constraint(equalTo: bottomAnchor),
 
-            pagesLeftLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            pagesLeftLabel.trailingAnchor.constraint(equalTo: sliderView.trailingAnchor),
             pagesLeftLabel.bottomAnchor.constraint(equalTo: bottomAnchor),
 
-            sliderView.heightAnchor.constraint(equalToConstant: 12),
-            sliderView.topAnchor.constraint(equalTo: topAnchor, constant: 10),
-            sliderView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            sliderView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12)
+            previousChapterButton.leadingAnchor.constraint(equalTo: leadingAnchor),
+            previousChapterButton.topAnchor.constraint(equalTo: topAnchor),
+            previousChapterButton.widthAnchor.constraint(equalToConstant: 44),
+            previousChapterButton.heightAnchor.constraint(equalToConstant: 44),
+            nextChapterButton.trailingAnchor.constraint(equalTo: trailingAnchor),
+            nextChapterButton.topAnchor.constraint(equalTo: topAnchor),
+            nextChapterButton.widthAnchor.constraint(equalToConstant: 44),
+            nextChapterButton.heightAnchor.constraint(equalToConstant: 44),
+            sliderView.heightAnchor.constraint(equalToConstant: 32),
+            sliderView.topAnchor.constraint(equalTo: topAnchor),
+            sliderView.leadingAnchor.constraint(equalTo: previousChapterButton.trailingAnchor, constant: 4),
+            sliderView.trailingAnchor.constraint(equalTo: nextChapterButton.leadingAnchor, constant: -4)
         ])
     }
 
@@ -96,6 +114,8 @@ class ReaderToolbarView: UIView {
 
     // allow slider thumb to be touched outside bounds
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard !isHidden, alpha > 0.01, isUserInteractionEnabled else { return nil }
+        if sliderView.frame.contains(point) { return sliderView }
         for subview in subviews where subview is ReaderSliderView {
             if subview.subviews.contains(where: { $0.bounds.contains(convert(point, to: $0)) }) {
                 return subview
@@ -132,6 +152,7 @@ class ReaderToolbarView: UIView {
         }
         let pagesLeft = totalPages - currentPage
         currentPageLabel.text = String(format: NSLocalizedString("%i_OF_%i"), currentPage, totalPages)
+        sliderView.accessibilityValue = currentPageLabel.text
         if pagesLeft < 1 {
             pagesLeftLabel.text = nil
         } else {

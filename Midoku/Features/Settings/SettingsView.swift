@@ -136,12 +136,12 @@ extension SettingsView {
 
 extension SettingsView {
     func updateCategories() async {
-        let (categoriesOnly, categoriesAndGroups) = await CoreDataManager.shared.container.performBackgroundTask { context in
-            (
-                CoreDataManager.shared.getCategoryTitles(context: context),
-                CoreDataManager.shared.getCategoryTitles(excludeFilterGroups: false, context: context)
-            )
+        await MCCollectionStore.shared.importLegacyCategories()
+        let groups = await CoreDataManager.shared.container.performBackgroundTask { context in
+            CoreDataManager.shared.getCategories(groupsOnly: true, context: context).compactMap(\.title)
         }
+        let categoriesOnly = MCCollectionStore.shared.snapshot.categories.map(\.name)
+        let categoriesAndGroups = categoriesOnly + groups.filter { !categoriesOnly.contains($0) }
 
         self.categoriesOnly = categoriesOnly
         self.categoriesAndGroups = categoriesAndGroups
@@ -301,7 +301,7 @@ extension SettingsView {
     @ViewBuilder
     func pageContentHandler(_ key: String) -> (some View)? {
         if key == "Library.categories" {
-            CategoriesView(categories: $categoriesOnly)
+            MCCategoriesPage()
         } else if key == "Library.filterGroups" {
             FilterGroupsView()
         } else if key == "Reader.tapZones" {

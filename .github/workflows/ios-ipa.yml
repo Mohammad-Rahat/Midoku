@@ -56,7 +56,7 @@ jobs:
           xcrun simctl bootstatus "$device_id" -b
           xcrun simctl install "$device_id" "$app"
           mkdir -p build/screenshots
-          for screen in collection entry edit paste; do
+          for screen in collection compact entry edit add paste selection chapter-selection categories reader; do
             xcrun simctl terminate "$device_id" com.raahat.Midoku || true
             xcrun simctl launch "$device_id" com.raahat.Midoku --collection-preview "--$screen-preview"
             sleep 3

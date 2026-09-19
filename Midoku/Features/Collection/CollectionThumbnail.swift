@@ -90,8 +90,11 @@ struct MCChapterThumbnail: View {
                     Image(uiImage: image).resizable().scaledToFill()
                 } else if let chapter, let thumbnail = store.snapshot.chapters.first(where: { $0.chapterID == chapter.id })?.chapter.thumbnail {
                     SourceImageView(source: store.source(chapter.identity.listing.connectionID), imageUrl: thumbnail,
-                        width: geometry.size.width, height: geometry.size.height, placeholder: "MidokuChapterPlaceholder")
-                } else { Image("MidokuChapterPlaceholder").resizable().scaledToFill() }
+                        width: geometry.size.width, height: geometry.size.height, placeholderSymbol: "photo")
+                } else {
+                    Color(uiColor: .secondarySystemBackground)
+                        .overlay { Image(systemName: "photo").font(.title3).foregroundStyle(.tertiary) }
+                }
             }.frame(width: geometry.size.width, height: geometry.size.height, alignment: .top).clipped()
         }
         .onScrollVisibilityChange(threshold: 0.1) { visible = $0 }

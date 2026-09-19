@@ -324,15 +324,9 @@ struct MangaDetailsHeaderView: View {
                 // on long hold, show category select
                 LongPressGesture()
                     .onEnded { _ in
-                        if bookmarked && hasCategories {
+                        if let id = MCCollectionStore.shared.entryID(for: manga) {
                             longHeldBookmark = true
-                            path.present(
-                                UINavigationController(
-                                    rootViewController: CategorySelectViewController(
-                                        manga: manga
-                                    )
-                                )
-                            )
+                            path.present(UIHostingController(rootView: MCEntryEditor(entryID: id)))
                         }
                     }
             )

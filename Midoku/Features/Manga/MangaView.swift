@@ -406,7 +406,7 @@ extension MangaView {
             chapterKey: chapter.key
         )
 
-        Button("Copy chapter to collection", systemImage: "doc.on.doc") {
+        Button("Copy chapter", systemImage: "doc.on.doc") {
             MCCollectionStore.shared.copy(manga: viewModel.manga, chapters: [chapter])
         }
         let hasDownloadButton = viewModel.source != nil && !viewModel.manga.isLocal() && downloadStatus != .finished && downloadStatus != .downloading

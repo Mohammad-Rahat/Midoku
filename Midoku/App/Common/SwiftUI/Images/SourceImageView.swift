@@ -19,6 +19,7 @@ struct SourceImageView: View {
     var downsampleWidth: CGFloat?
     var contentMode: ContentMode = .fill
     var placeholder = "MangaPlaceholder"
+    var placeholderSymbol: String?
 
     @State private var imageRequest: ImageRequest?
 
@@ -45,6 +46,11 @@ struct SourceImageView: View {
                 )
                     .frame(width: width, height: height)
                     .id(state.image != nil ? imageUrl : "placeholder") // ensures only opacity is animated
+            } else if state.image == nil, let placeholderSymbol {
+                Image(systemName: placeholderSymbol)
+                    .font(.title3).foregroundStyle(.tertiary)
+                    .frame(width: width, height: height)
+                    .background(Color(uiColor: .secondarySystemBackground))
             } else {
                 let result = if let image = state.image {
                     image

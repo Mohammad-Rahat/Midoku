@@ -3,6 +3,7 @@ import SwiftUI
 
 struct MCEntryView: View {
     let entryID: UUID
+    @Environment(\.dismiss) private var dismiss
     @State private var store = MCCollectionStore.shared
     @State private var showEdit = false
     @State private var showPaste = false
@@ -10,85 +11,61 @@ struct MCEntryView: View {
     @State private var selected = Set<UUID>()
     @State private var selecting = false
     @State private var editingChapter: MCID?
+    @State private var resettingChapter: MCID?
     @State private var reader: MCReaderSheet?
-    @State private var query = ""
-    @State private var editingOrder = false
+    @State private var showReorder = false
+    @State private var confirmRemove = false
+    @State private var confirmReset = false
+    @State private var confirmRemoveChapters = false
     @AppStorage("Midoku.chapterGrid") private var grid = false
     private var entry: MCPersonalEntry? { store.library.entry(entryID) }
     private var slots: [MCChapterSlot] {
         guard let entry else { return [] }
-        let values = entry.slots.filter { slot in query.isEmpty || slot.preferred.map { store.library.chapterDisplayTitle($0).localizedCaseInsensitiveContains(query) } == true }
-        return entry.descendingDisplay && !editingOrder ? Array(values.reversed()) : values
+        return entry.descendingDisplay ? Array(entry.slots.reversed()) : entry.slots
     }
 
     var body: some View {
         Group {
             if let entry {
-                List {
-                    header(entry).listRowSeparator(.hidden)
-                    HStack {
-                        Text("\(entry.slots.count) chapters").font(.headline)
-                        Spacer()
-                        if store.isRefreshing { ProgressView() }
-                        Button { selecting.toggle(); selected.removeAll() } label: { Image(systemName: selecting ? "checkmark.circle.fill" : "checkmark.circle") }
-                            .accessibilityLabel(selecting ? "Done selecting" : "Select chapters")
-                        Button { store.perform { try $0.library.editEntry(entryID) { $0.descendingDisplay.toggle() } } } label: { Image(systemName: "arrow.up.arrow.down") }.accessibilityLabel("Reverse displayed chapter order")
-                    }.buttonStyle(.borderless)
-                    if slots.isEmpty { Text("Copy chapters from a source, then paste them here.").foregroundStyle(.secondary) }
-                    if grid && !editingOrder {
-                        ForEach(stride(from: 0, to: slots.count, by: 3).map { $0 }, id: \.self) { offset in
-                            HStack(alignment: .top, spacing: 12) {
-                                ForEach(Array(slots[offset..<min(offset + 3, slots.count)])) { slot in
-                                    chapterRow(slot, grid: true).frame(maxWidth: .infinity)
-                                }
-                                ForEach(0..<max(0, 3 - min(3, slots.count - offset)), id: \.self) { _ in Color.clear.frame(maxWidth: .infinity) }
-                            }.listRowSeparator(.hidden)
-                        }
-                    } else {
-                        ForEach(slots) { chapterRow($0, grid: false) }
-                            .onMove { from, to in
-                                guard query.isEmpty else { return }
-                                store.perform { state in
-                                    try state.library.editEntry(entryID) { entry in entry.manualOrder = true; entry.slots.move(fromOffsets: from, toOffset: to) }
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 16, pinnedViews: [.sectionHeaders]) {
+                        header(entry).padding(.horizontal)
+                        Section {
+                            if slots.isEmpty {
+                                Text("Copy chapters from a source, then paste them here.").foregroundStyle(.secondary).padding(.horizontal)
+                            }
+                            if grid {
+                                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), alignment: .leading, spacing: 18) {
+                                    ForEach(slots) { chapterRow($0, grid: true) }
+                                }.padding(.horizontal)
+                            } else {
+                                ForEach(slots) { slot in
+                                    chapterRow(slot, grid: false).padding(.horizontal)
+                                    Divider().padding(.leading, 76)
                                 }
                             }
-                            .onDelete { indices in
-                                let ids = Set(indices.map { slots[$0].id })
-                                store.perform { try $0.library.removeSlots(entryID: entryID, slotIDs: ids) }
-                            }
-                    }
+                        } header: { chapterActions }
+                    }.padding(.vertical, 12)
                 }
-                .listStyle(.plain).scrollContentBackground(.hidden).background(Color("MidokuBackground"))
-                .environment(\.editMode, .constant(editingOrder ? .active : .inactive))
+                .background(Color(uiColor: .systemBackground))
                 .refreshable { await store.refresh(entryID: entryID) }
                 .navigationTitle(store.library.title(entry)).navigationBarTitleDisplayMode(.inline)
-                .searchable(text: $query, prompt: "Search chapters")
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
                             Button("Edit entry", systemImage: "square.and.pencil") { showEdit = true }
-                            if !store.library.clipboard.isEmpty { Button("Paste \(store.library.clipboard.count) chapters", systemImage: "doc.on.clipboard") { showPaste = true } }
+                            Button("Reset edits", systemImage: "arrow.counterclockwise") { confirmReset = true }
+                            if !store.library.clipboard.isEmpty { Button("Paste chapters", systemImage: "doc.on.clipboard") { showPaste = true } }
                             Button("Sources and alternatives", systemImage: "square.stack.3d.up") { showSources = true }
                             Toggle("Chapter grid", isOn: $grid)
-                            Button(editingOrder ? "Finish ordering" : "Reorder chapters", systemImage: "line.3.horizontal") { query = ""; editingOrder.toggle() }
+                            Button("Reorder chapters", systemImage: "line.3.horizontal") { selecting = false; showReorder = true }
                             if entry.manualOrder {
                                 Button("Restore chapter-number order") { store.perform { try $0.library.editEntry(entryID) { $0.manualOrder = false } } }
                             }
                             Button("Refresh sources", systemImage: "arrow.clockwise") { Task { await store.refresh(entryID: entryID) } }.disabled(store.isRefreshing)
+                            Divider()
+                            Button("Remove from collection", systemImage: "trash", role: .destructive) { confirmRemove = true }
                         } label: { Image(systemName: "ellipsis.circle") }.accessibilityLabel("Entry options")
-                    }
-                    if selecting {
-                        ToolbarItem(placement: .bottomBar) {
-                            Menu("\(selected.count) selected") {
-                                Button("Select all") { selected = Set(slots.map(\.id)) }
-                                Button("Copy chapters", systemImage: "doc.on.doc") { copySelected(); selecting = false }
-                                Button("Mark read") { store.setRead(entryID: entryID, slotIDs: selected, read: true) }
-                                Button("Mark unread") { store.setRead(entryID: entryID, slotIDs: selected, read: false) }
-                                Button("Remove from entry", role: .destructive) {
-                                    if store.perform({ try $0.library.removeSlots(entryID: entryID, slotIDs: selected) }) { selected.removeAll(); selecting = false }
-                                }
-                            }
-                        }
                     }
                 }
             } else { ContentUnavailableView("Entry unavailable", systemImage: "book.closed") }
@@ -96,15 +73,71 @@ struct MCEntryView: View {
         .sheet(isPresented: $showEdit) { MCEntryEditor(entryID: entryID) }
         .sheet(isPresented: $showPaste) { MCPasteView(entryID: entryID) }
         .sheet(isPresented: $showSources) { MCEntrySourcesView(entryID: entryID) }
+        .sheet(isPresented: $showReorder) { MCChapterOrderView(entryID: entryID) }
         .sheet(item: $editingChapter) { MCChapterEditor(entryID: entryID, slotID: $0.id) }
         .fullScreenCover(item: $reader) { MCReaderView(sequence: $0.sequence).ignoresSafeArea() }
+        .confirmationDialog("Remove this entry from collection?", isPresented: $confirmRemove) {
+            Button("Remove entry", role: .destructive) { if store.removeEntries([entryID]) { dismiss() } }
+        } message: { Text("Reading history and downloaded chapters are kept.") }
+        .confirmationDialog("Reset entry edits?", isPresented: $confirmReset) {
+            Button("Reset edits", role: .destructive) { store.perform { try $0.library.resetDetails(entryID) } }
+        } message: { Text("Resets the entry’s title, description, author and cover. Chapters, categories and reading progress are kept.") }
+        .confirmationDialog("Reset chapter edits?", isPresented: Binding(get: { resettingChapter != nil }, set: { if !$0 { resettingChapter = nil } }), presenting: resettingChapter) { item in
+            Button("Reset edits", role: .destructive) { store.perform { try $0.library.resetChapterDetails(entryID: entryID, slotID: item.id) } }
+        } message: { _ in Text("Restores the source title, number, volume and thumbnail.") }
+        .confirmationDialog("Remove selected chapters?", isPresented: $confirmRemoveChapters) {
+            Button("Remove chapters", role: .destructive) {
+                if store.perform({ try $0.library.removeSlots(entryID: entryID, slotIDs: selected) }) { selected.removeAll(); selecting = false }
+            }
+        }
         .mcErrors(store)
+        .onChange(of: slots.map(\.id)) { _, ids in selected.formIntersection(ids) }
         .onAppear {
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("--edit-preview") { showEdit = true }
-            if ProcessInfo.processInfo.arguments.contains("--paste-preview") { showPaste = true }
+            let args = ProcessInfo.processInfo.arguments
+            if args.contains("--edit-preview") { showEdit = true }
+            if args.contains("--paste-preview") { showPaste = true }
+            if args.contains("--chapter-selection-preview") { grid = true; selecting = true; selected = Set(slots.prefix(2).map(\.id)) }
             #endif
         }
+        .task {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--reader-preview") {
+                await MCCollectionPreview.installReaderSources()
+                if let slot = slots.dropFirst().first { open(slot) }
+            }
+            #endif
+        }
+    }
+
+    private var chapterActions: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text(selecting ? "\(selected.count) selected" : "\(slots.count) chapters").font(.headline)
+                Spacer()
+                if store.isRefreshing { ProgressView() }
+                Button { selecting.toggle(); selected.removeAll() } label: {
+                    Image(systemName: selecting ? "checkmark.circle.fill" : "checkmark.circle").frame(width: 32, height: 32)
+                }.accessibilityLabel(selecting ? "Done selecting" : "Select chapters")
+                Button { store.perform { try $0.library.editEntry(entryID) { $0.descendingDisplay.toggle() } } } label: {
+                    Image(systemName: "arrow.up.arrow.down").frame(width: 32, height: 32)
+                }.accessibilityLabel("Reverse displayed chapter order")
+            }
+            if selecting {
+                HStack {
+                    Button(selected.count == slots.count ? "Deselect all" : "Select all") {
+                        selected = selected.count == slots.count ? [] : Set(slots.map(\.id))
+                    }
+                    Spacer()
+                    Menu {
+                        Button("Copy chapters", systemImage: "doc.on.doc") { copySelected(); selecting = false; selected.removeAll() }
+                        Button("Mark read", systemImage: "checkmark") { store.setRead(entryID: entryID, slotIDs: selected, read: true) }
+                        Button("Mark unread", systemImage: "circle") { store.setRead(entryID: entryID, slotIDs: selected, read: false) }
+                        Button("Remove chapters", systemImage: "trash", role: .destructive) { confirmRemoveChapters = true }
+                    } label: { Label("Actions", systemImage: "ellipsis.circle") }.disabled(selected.isEmpty)
+                }.font(.subheadline)
+            }
+        }.padding(.horizontal).padding(.vertical, 8).background(Color(uiColor: .systemBackground))
     }
 
     private func header(_ entry: MCPersonalEntry) -> some View {
@@ -112,22 +145,23 @@ struct MCEntryView: View {
             HStack(alignment: .top, spacing: 16) {
                 MCEntryCover(entry: entry).frame(width: 88, height: 132).clipShape(RoundedRectangle(cornerRadius: 9))
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(store.library.title(entry)).font(.title3.bold()).lineLimit(3)
+                    Text(store.library.title(entry)).font(.title3.bold()).lineLimit(4)
                     Text(entry.authorOverride ?? store.library.listing(entry.primaryListingID)?.details.authors?.joined(separator: ", ") ?? "").font(.subheadline).foregroundStyle(.secondary)
                     Text("\(entry.status.title) · \(entry.links.count) sources").font(.caption).foregroundStyle(.secondary)
-                    Button {
-                        let slot = entry.slots.first { !store.library.isRead($0) } ?? entry.slots.first
-                        if let slot { open(slot) }
-                    } label: { Label("Read", systemImage: "book.fill").frame(minWidth: 80) }.buttonStyle(.borderedProminent).disabled(entry.slots.isEmpty)
-                }
+                    if !store.library.description(entry).isEmpty {
+                        Text(store.library.description(entry)).font(.subheadline).foregroundStyle(.secondary).lineLimit(3)
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading)
             }
-            if !store.library.description(entry).isEmpty {
-                Text(store.library.description(entry)).font(.subheadline).foregroundStyle(.secondary).lineLimit(3)
-            }
+            Button {
+                if let slot = entry.slots.first(where: { !store.library.isRead($0) }) ?? entry.slots.first { open(slot) }
+            } label: {
+                Label("Read", systemImage: "book.fill").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 4)
+            }.buttonStyle(.borderedProminent).disabled(entry.slots.isEmpty)
             if !store.library.clipboard.isEmpty {
                 Button("Paste \(store.library.clipboard.count) copied chapters", systemImage: "doc.on.clipboard") { showPaste = true }.font(.subheadline)
             }
-        }.padding(.vertical, 4)
+        }
     }
 
     private func chapterRow(_ slot: MCChapterSlot, grid: Bool) -> some View {
@@ -135,26 +169,15 @@ struct MCEntryView: View {
             if selecting { if !selected.insert(slot.id).inserted { selected.remove(slot.id) } }
             else { open(slot) }
         } label: {
-            Group {
-                if grid {
-                    VStack(alignment: .leading, spacing: 6) {
-                        MCChapterThumbnail(variant: slot.preferred).aspectRatio(2/3, contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: 7))
-                        chapterText(slot, compact: true)
-                    }
-                } else {
-                    HStack(spacing: 12) {
-                        MCChapterThumbnail(variant: slot.preferred).frame(width: 48, height: 72).clipShape(RoundedRectangle(cornerRadius: 6))
-                        chapterText(slot, compact: false)
-                        Spacer(minLength: 0)
-                        if selecting { Image(systemName: selected.contains(slot.id) ? "checkmark.circle.fill" : "circle") }
-                        else if store.library.isRead(slot) { Image(systemName: "checkmark.circle.fill").font(.caption).foregroundStyle(.secondary) }
-                    }
-                }
-            }.contentShape(Rectangle()).opacity(store.library.isRead(slot) ? 0.65 : 1)
+            chapterLabel(slot, grid: grid)
+                .contentShape(Rectangle())
         }.buttonStyle(.plain)
-            .contextMenu {
+        .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 8))
+        .contextMenu {
+
                 Button("Read chapter", systemImage: "book") { open(slot) }
                 Button("Edit chapter", systemImage: "pencil") { editingChapter = MCID(id: slot.id) }
+                Button("Reset edits", systemImage: "arrow.counterclockwise") { resettingChapter = MCID(id: slot.id) }
                 Button("Copy chapter", systemImage: "doc.on.doc") {
                     guard let variant = slot.preferred else { return }
                     store.perform { try $0.library.copy([MCCopiedChapter(chapterID: variant.chapterID, edits: variant.edits)]) }
@@ -178,14 +201,41 @@ struct MCEntryView: View {
                     }
                 }
                 Button("Remove from entry", role: .destructive) { store.perform { try $0.library.removeSlots(entryID: entryID, slotIDs: [slot.id]) } }
-            }
+        } preview: {
+            chapterLabel(slot, grid: true).padding(12).frame(width: 220).background(Color(uiColor: .systemBackground))
+        }
+    }
+
+    @ViewBuilder private func chapterLabel(_ slot: MCChapterSlot, grid: Bool) -> some View {
+        if grid {
+            VStack(alignment: .leading, spacing: 6) {
+                MCChapterThumbnail(variant: slot.preferred).aspectRatio(2/3, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+                    .overlay(alignment: .topTrailing) { if selecting { selectionMark(slot).padding(6) } }
+                chapterText(slot, compact: true)
+            }.opacity(store.library.isRead(slot) && !selecting ? 0.65 : 1)
+        } else {
+            HStack(spacing: 12) {
+                MCChapterThumbnail(variant: slot.preferred).frame(width: 48, height: 72).clipShape(RoundedRectangle(cornerRadius: 6))
+                chapterText(slot, compact: false)
+                Spacer(minLength: 0)
+                if selecting { selectionMark(slot) }
+                else if store.library.isRead(slot) { Image(systemName: "checkmark.circle.fill").font(.caption).foregroundStyle(.secondary) }
+            }.opacity(store.library.isRead(slot) && !selecting ? 0.65 : 1)
+        }
+    }
+
+    private func selectionMark(_ slot: MCChapterSlot) -> some View {
+        Image(systemName: selected.contains(slot.id) ? "checkmark.circle.fill" : "circle")
+            .font(.title3).symbolRenderingMode(.palette).foregroundStyle(.white, Color.accentColor)
+            .background(Circle().fill(Color.accentColor)).accessibilityLabel(selected.contains(slot.id) ? "Selected" : "Not selected")
     }
 
     private func chapterText(_ slot: MCChapterSlot, compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             if let variant = slot.preferred, let chapter = store.library.chapter(variant.chapterID) {
                 Text(store.library.chapterDisplayTitle(variant)).font(compact ? .caption.weight(.semibold) : .subheadline.weight(.medium)).lineLimit(1)
-                if !chapter.record.title.isEmpty && chapter.record.title != store.library.chapterDisplayTitle(variant) {
+                if variant.edits.title == nil, !chapter.record.title.isEmpty && chapter.record.title != store.library.chapterDisplayTitle(variant) {
                     Text(chapter.record.title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Text(store.sourceName(chapter.identity.listing.connectionID)).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
@@ -201,5 +251,28 @@ struct MCEntryView: View {
     private func copySelected() {
         let items = entry?.slots.filter { selected.contains($0.id) }.compactMap(\.preferred).map { MCCopiedChapter(chapterID: $0.chapterID, edits: $0.edits) } ?? []
         store.perform { try $0.library.copy(items) }
+    }
+}
+
+
+struct MCChapterOrderView: View {
+    let entryID: UUID
+    @State private var store = MCCollectionStore.shared
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(store.library.entry(entryID)?.slots ?? []) { slot in
+                    Text(slot.preferred.map { store.library.chapterDisplayTitle($0) } ?? "Chapter")
+                }.onMove { from, to in
+                    store.perform { state in
+                        try state.library.editEntry(entryID) { entry in entry.manualOrder = true; entry.slots.move(fromOffsets: from, toOffset: to) }
+                    }
+                }
+            }.environment(\.editMode, .constant(.active))
+                .navigationTitle("Chapter order").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+                .mcErrors(store)
+        }
     }
 }

@@ -59,11 +59,48 @@ struct MCReaderSheet: Identifiable {
     let sequence: MCReaderSequence
 }
 
+extension ReaderViewController {
+    func collectionCoverActions(image: UIImage, chapterKey: String) -> [UIAction] {
+        let store = MCCollectionStore.shared
+        let route = collectionSequence?.route(key: chapterKey)
+        let identity = route?.identifier ?? ChapterIdentifier(sourceKey: manga.sourceKey, mangaKey: manga.key, chapterKey: chapterKey)
+        let target = store.coverTarget(identifier: identity, entryID: collectionSequence?.entryID,
+                                      variantID: collectionSequence == nil ? nil : UUID(uuidString: chapterKey))
+        // Freeze the pressed page's target. Infinite scrolling may already be displaying another chapter.
+        return [false, true].map { forEntry in
+            let action = UIAction(title: forEntry ? "Set as entry cover" : "Set as chapter cover",
+                                  image: UIImage(systemName: forEntry ? "book.closed" : "photo"),
+                                  attributes: target == nil ? .disabled : []) { [weak self] _ in
+                guard let target else { return }
+                do {
+                    guard let data = image.jpegData(compressionQuality: 0.9) else { throw MCLibraryFailure.cover }
+                    try store.setCover(data: data, target: target, forEntry: forEntry)
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                } catch {
+                    let alert = UIAlertController(title: "Cover could not be saved", message: error.localizedDescription, preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self?.present(alert, animated: true)
+                }
+            }
+            if target == nil { action.subtitle = "Add this title to Collection first" }
+            return action
+        }
+    }
+}
+
 struct MCReaderView: UIViewControllerRepresentable {
     let sequence: MCReaderSequence
     func makeUIViewController(context: Context) -> ReaderNavigationController {
         guard let route = sequence.route(key: sequence.initialKey) else { preconditionFailure("Validated reader route missing") }
         let reader = ReaderViewController(source: route.source, manga: route.manga, chapter: route.displayChapter, collectionSequence: sequence)
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--reader-preview") {
+            Task { @MainActor [weak reader] in
+                try? await Task.sleep(for: .seconds(1))
+                reader?.showBars()
+            }
+        }
+        #endif
         return ReaderNavigationController(readerViewController: reader)
     }
     func updateUIViewController(_ uiViewController: ReaderNavigationController, context: Context) {}

@@ -7,6 +7,7 @@
 
 import Foundation
 import AidokuRunner
+import UIKit
 
 protocol ReaderHoldingDelegate: AnyObject {
     var barsHidden: Bool { get }
@@ -16,6 +17,7 @@ protocol ReaderHoldingDelegate: AnyObject {
     func getNextChapter() -> AidokuRunner.Chapter?
     func getPreviousChapter() -> AidokuRunner.Chapter?
     func setChapter(_ chapter: AidokuRunner.Chapter)
+    func collectionCoverActions(image: UIImage, chapterKey: String) -> [UIAction]
 
     func setCurrentPage(_ page: Int, position: Double?)
     func setCurrentPages(_ pages: ClosedRange<Int>)

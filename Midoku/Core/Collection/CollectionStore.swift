@@ -9,7 +9,7 @@ nonisolated struct MCConnection: Codable, Identifiable, Sendable {
     var name: String
 }
 
-nonisolated struct MCCategory: Codable, Identifiable, Sendable {
+nonisolated struct MCCategory: Codable, Identifiable, Sendable, Equatable {
     var id = UUID()
     var name: String
 }
@@ -53,6 +53,7 @@ nonisolated struct MCCollectionSnapshot: Codable, Sendable {
     var manga: [MCStoredManga] = []
     var chapters: [MCStoredChapter] = []
     var adopted: Set<MangaIdentifier> = []
+    var legacyCategoriesImported: Bool?
 
     func validate() throws {
         guard version == 1, Set(connections.map(\.sourceKey)).count == connections.count,
@@ -145,7 +146,9 @@ final class MCCollectionStore {
         let data = try JSONEncoder().encode(candidate)
         try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try data.write(to: fileURL, options: [.atomic])
+        let categoriesChanged = snapshot.categories != candidate.categories
         snapshot = candidate
+        if categoriesChanged { NotificationCenter.default.post(name: .updateCategories, object: nil) }
     }
 
     @discardableResult
@@ -170,7 +173,8 @@ final class MCCollectionStore {
     }
 
     @discardableResult
-    func add(_ manga: AidokuRunner.Manga, chapters: [AidokuRunner.Chapter], categories: Set<UUID> = [], status: MCPersonalStatus = .planned, follow: Bool = true) throws -> UUID {
+    func add(_ manga: AidokuRunner.Manga, chapters: [AidokuRunner.Chapter], categories: Set<UUID> = [], status: MCPersonalStatus = .planned, follow: Bool = true,
+             title: String? = nil, description: String? = nil, author: String? = nil, cover: MCLibraryCover? = nil) throws -> UUID {
         if let existing = entryID(for: manga) { return existing }
         let name = SourceStore.shared.source(for: manga.sourceKey)?.name ?? manga.sourceKey
         var result = UUID()
@@ -182,6 +186,10 @@ final class MCCollectionStore {
             entry.primaryListingID = listingID
             entry.categoryIDs = categories
             entry.status = status
+            entry.titleOverride = title
+            entry.descriptionOverride = description
+            entry.authorOverride = author
+            if let cover { state.library.covers.append(cover); entry.coverID = cover.id }
             entry.links = [MCEntrySourceLink(listingID: listingID, followsNewChapters: follow, needsInitialImport: chapters.isEmpty && manga.chapters == nil)]
             entry.slots = state.library.chapters.filter { $0.identity.listing == listing.identity && $0.available }
                 .map { MCChapterSlot(variant: MCChapterVariant(chapterID: $0.id)) }
@@ -201,6 +209,30 @@ final class MCCollectionStore {
             let ids = Dictionary(uniqueKeysWithValues: state.library.chapters.filter { $0.identity.listing == listing.identity }.map { ($0.record.id, $0.id) })
             try state.library.copy(chapters.compactMap { ids[$0.key].map { MCCopiedChapter(chapterID: $0) } })
         }
+    }
+
+    @discardableResult
+    func removeEntries(_ ids: Set<UUID>) -> Bool {
+        let removedListings = Set(library.entries.filter { ids.contains($0.id) }.compactMap(\.primaryListingID))
+        guard perform({ $0.library.removeEntries(ids) }) else { return false }
+        let remainingListings = Set(library.entries.compactMap(\.primaryListingID))
+        let mangaIDs = snapshot.manga.filter { removedListings.contains($0.listingID) && !remainingListings.contains($0.listingID) }.map { $0.manga.identifier }
+        Task {
+            let stillRemoved = mangaIDs.filter { id in
+                !library.entries.contains { entry in snapshot.manga.first { $0.listingID == entry.primaryListingID }?.manga.identifier == id }
+            }
+            do {
+                try await CoreDataManager.shared.container.performBackgroundTask { context in
+                    for id in stillRemoved {
+                        if let bookmark = CoreDataManager.shared.getLibraryManga(mangaId: id, context: context) { context.delete(bookmark) }
+                    }
+                    try context.save()
+                }
+                for id in stillRemoved { NotificationCenter.default.post(name: .removeFromLibrary, object: id) }
+                NotificationCenter.default.post(name: .updateLibrary, object: nil)
+            } catch { self.error = error.localizedDescription }
+        }
+        return true
     }
 
     func refresh(entryID: UUID? = nil) async {
@@ -286,6 +318,41 @@ final class MCCollectionStore {
         let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
         guard let result = resized.jpegData(compressionQuality: 0.75), result.count <= 1_048_576 else { throw MCLibraryFailure.cover }
         return MCLibraryCover(data: result)
+    }
+
+    struct CoverTarget {
+        let entryID: UUID
+        let slotID: UUID
+        let variantID: UUID
+    }
+
+    func coverTarget(identifier: ChapterIdentifier, entryID: UUID? = nil, variantID: UUID? = nil) -> CoverTarget? {
+        for entry in library.entries where entryID == nil || entry.id == entryID {
+            for slot in entry.slots {
+                for variant in slot.variants where variantID == nil || variant.id == variantID {
+                    guard let chapter = library.chapter(variant.chapterID),
+                          let physical = physical(chapter.identity),
+                          physical.manga.sourceKey == identifier.sourceKey,
+                          physical.manga.key == identifier.mangaKey,
+                          physical.chapter.key == identifier.chapterKey else { continue }
+                    return CoverTarget(entryID: entry.id, slotID: slot.id, variantID: variant.id)
+                }
+            }
+        }
+        return nil
+    }
+
+    func setCover(data: Data, target: CoverTarget, forEntry: Bool) throws {
+        let cover = try saveCover(data: data)
+        try change { state in
+            state.library.covers.append(cover)
+            try state.library.editEntry(target.entryID) { entry in
+                guard let s = entry.slots.firstIndex(where: { $0.id == target.slotID }),
+                      let v = entry.slots[s].variants.firstIndex(where: { $0.id == target.variantID }) else { throw MCLibraryFailure.missing }
+                if forEntry { entry.coverID = cover.id; entry.hidesCover = false }
+                else { entry.slots[s].variants[v].edits.coverID = cover.id }
+            }
+        }
     }
 
     func backupData() throws -> Data { try JSONEncoder().encode(snapshot) }

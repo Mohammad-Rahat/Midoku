@@ -209,15 +209,21 @@ nonisolated struct MCLibraryState: Codable, Sendable {
     /// Reset presentation overrides without rebuilding or discarding the mixed-source composition.
     mutating func resetDetails(_ id: UUID) throws {
         try editEntry(id) { entry in
-            if let original = entry.links.first?.listingID {
-                entry.primaryListingID = original
+            if entry.primaryListingID != nil {
                 entry.titleOverride = nil; entry.descriptionOverride = nil; entry.authorOverride = nil
+            } else {
+                entry.descriptionOverride = nil; entry.authorOverride = nil
             }
             entry.coverID = nil; entry.hidesCover = false
-            entry.readerOverride = nil; entry.manualOrder = false; entry.descendingDisplay = false
-            for slot in entry.slots.indices {
-                for variant in entry.slots[slot].variants.indices { entry.slots[slot].variants[variant].edits = MCChapterEdits() }
-            }
+        }
+    }
+
+    mutating func resetChapterDetails(entryID: UUID, slotID: UUID) throws {
+        try editEntry(entryID) { entry in
+            guard let s = entry.slots.firstIndex(where: { $0.id == slotID }),
+                  let v = entry.slots[s].variants.firstIndex(where: { $0.id == entry.slots[s].preferredID })
+            else { throw MCLibraryFailure.missing }
+            entry.slots[s].variants[v].edits = MCChapterEdits()
         }
     }
 
@@ -272,10 +278,10 @@ nonisolated struct MCLibraryState: Codable, Sendable {
         clipboard = items
     }
 
-    func pastePreview(entryID: UUID) throws -> [MCPasteChoice] {
+    func pastePreview(entryID: UUID, items: [MCCopiedChapter]? = nil) throws -> [MCPasteChoice] {
         guard let entry = entry(entryID) else { throw MCLibraryFailure.missing }
         let existing = Set(entry.slots.flatMap(\.variants).map(\.chapterID))
-        return clipboard.map { item in
+        return (items ?? clipboard).map { item in
             let incoming = MCChapterVariant(chapterID: item.chapterID, edits: item.edits)
             let match = entry.slots.first { slot in
                 guard let variant = slot.preferred, let lhs = number(variant), let rhs = number(incoming), !lhs.isEmpty, !rhs.isEmpty else { return false }
@@ -321,6 +327,10 @@ nonisolated struct MCLibraryState: Codable, Sendable {
         entry.sequenceRevision += 1; entry.updatedAt = Date()
         if !entry.manualOrder { candidate.sortSequence(&entry) }
         candidate.entries[index] = entry
+        // Only consume this preview's clipboard items after the paste succeeds.
+        // Chapters copied while the sheet was open must not be discarded.
+        let reviewed = Set(choices.map(\.id))
+        candidate.clipboard.removeAll { reviewed.contains($0.id) }
         self = candidate
     }
 

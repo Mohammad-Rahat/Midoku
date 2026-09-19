@@ -39,7 +39,7 @@ struct MCEntryEditor: View {
                     Button("Manage categories") { showCategories = true }
                 }
                 if entryID != nil {
-                    Section { Button("Reset to source details", role: .destructive) { resetConfirm = true } }
+                    Section { Button("Reset edits", role: .destructive) { resetConfirm = true } }
                 }
             }
             .navigationTitle(entryID == nil ? "New entry" : "Edit entry").navigationBarTitleDisplayMode(.inline)
@@ -61,10 +61,10 @@ struct MCEntryEditor: View {
             } }
             .sheet(isPresented: $showCategories) { MCCategoriesView() }
             .confirmationDialog("Reset this entry’s details?", isPresented: $resetConfirm) {
-                Button("Reset details", role: .destructive) {
+                Button("Reset edits", role: .destructive) {
                     if let entryID, store.perform({ try $0.library.resetDetails(entryID) }) { dismiss() }
                 }
-            } message: { Text("Source chapters, mixed-source links, categories and progress are kept.") }
+            } message: { Text("Restores entry details and cover. Chapter edits, categories and progress are kept.") }
             .mcErrors(store)
         }
     }
@@ -109,7 +109,7 @@ struct MCChapterEditor: View {
                 TextField("Volume", text: $volume)
                 PhotosPicker("Choose chapter thumbnail", selection: $photo, matching: .images)
                 if let cover, let image = UIImage(data: cover.data) { Image(uiImage: image).resizable().scaledToFit().frame(height: 180) }
-                Button("Reset chapter details") { save(reset: true) }
+                Button("Reset edits") { save(reset: true) }
             }.navigationTitle("Edit chapter").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -117,7 +117,7 @@ struct MCChapterEditor: View {
                 }
                 .onAppear {
                     guard !loaded, let variant else { return }; loaded = true
-                    title = store.library.chapterTitle(variant); number = store.library.number(variant) ?? ""
+                    title = store.library.chapterDisplayTitle(variant); number = store.library.number(variant) ?? ""
                     volume = variant.edits.volume ?? store.library.chapter(variant.chapterID)?.record.volume ?? ""
                 }
                 .onChange(of: photo) { _, photo in Task {
@@ -135,9 +135,9 @@ struct MCChapterEditor: View {
                       let v = entry.slots[s].variants.firstIndex(where: { $0.id == variant.id }) else { throw MCLibraryFailure.missing }
                 if reset { entry.slots[s].variants[v].edits = MCChapterEdits() }
                 else {
-                    entry.slots[s].variants[v].edits.title = title
-                    entry.slots[s].variants[v].edits.number = number
-                    entry.slots[s].variants[v].edits.volume = volume
+                    if title != store.library.chapterDisplayTitle(variant) { entry.slots[s].variants[v].edits.title = title }
+                    if number != (store.library.number(variant) ?? "") { entry.slots[s].variants[v].edits.number = number }
+                    if volume != (variant.edits.volume ?? store.library.chapter(variant.chapterID)?.record.volume ?? "") { entry.slots[s].variants[v].edits.volume = volume }
                     if let cover { entry.slots[s].variants[v].edits.coverID = cover.id }
                 }
             }
@@ -146,36 +146,73 @@ struct MCChapterEditor: View {
 }
 
 struct MCCategoriesView: View {
-    @State private var store = MCCollectionStore.shared
-    @State private var name = ""
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Categories") {
-                    ForEach(store.snapshot.categories) { category in
-                        TextField("Category", text: Binding(get: { store.snapshot.categories.first { $0.id == category.id }?.name ?? category.name }, set: { value in
-                            guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-                            store.perform { state in if let i = state.categories.firstIndex(where: { $0.id == category.id }) { state.categories[i].name = String(value.prefix(80)) } }
-                        }))
-                    }.onDelete { indices in
-                        let ids = Set(indices.map { store.snapshot.categories[$0].id })
-                        store.perform { state in
-                            state.categories.removeAll { ids.contains($0.id) }
-                            for i in state.library.entries.indices { state.library.entries[i].categoryIDs.subtract(ids) }
-                        }
-                    }
-                }
-                Section {
-                    TextField("New category", text: $name)
-                    Button("Add category") {
-                        let value = name.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !value.isEmpty, !store.snapshot.categories.contains(where: { $0.name.localizedCaseInsensitiveCompare(value) == .orderedSame }) else { return }
-                        if store.perform({ $0.categories.append(MCCategory(name: String(value.prefix(80)))) }) { name = "" }
-                    }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }.navigationTitle("Categories").toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }.mcErrors(store)
+            MCCategoriesPage()
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
+    }
+}
+
+struct MCCategoriesPage: View {
+    @State private var store = MCCollectionStore.shared
+    @State private var name = ""
+    @State private var renaming: MCCategory?
+    @State private var renamedTitle = ""
+    var body: some View {
+        Form {
+            Section("Categories") {
+                ForEach(store.snapshot.categories) { category in
+                    HStack {
+                        Text(category.name)
+                        Spacer()
+                        Button { renamedTitle = category.name; renaming = category } label: { Image(systemName: "pencil") }
+                            .buttonStyle(.borderless).accessibilityLabel("Rename \(category.name)")
+                    }
+                }.onDelete { indices in
+                    let ids = Set(indices.map { store.snapshot.categories[$0].id })
+                    store.perform { state in
+                        state.categories.removeAll { ids.contains($0.id) }
+                        for i in state.library.entries.indices { state.library.entries[i].categoryIDs.subtract(ids) }
+                    }
+                }.onMove { from, to in store.perform { $0.categories.move(fromOffsets: from, toOffset: to) } }
+            }
+            Section {
+                TextField("New category", text: $name)
+                Button("Add category") {
+                    let value = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard validName(value) else { return }
+                    if store.perform({ $0.categories.append(MCCategory(name: value)) }) { name = "" }
+                }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .environment(\.editMode, .constant(.active))
+        .navigationTitle("Categories").navigationBarTitleDisplayMode(.inline)
+        .alert("Rename category", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Name", text: $renamedTitle)
+            Button("Cancel", role: .cancel) { renaming = nil }
+            Button("Save") {
+                guard let category = renaming else { return }
+                let value = renamedTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard validName(value, excluding: category.id) else { return }
+                if AppSettings.library.defaultCategory.get() == category.name { AppSettings.library.defaultCategory.set(value) }
+                store.perform { state in
+                    if let index = state.categories.firstIndex(where: { $0.id == category.id }) { state.categories[index].name = value }
+                }
+                renaming = nil
+            }
+        }
+        .task { await store.importLegacyCategories() }
+        .mcErrors(store)
+    }
+    private func validName(_ value: String, excluding id: UUID? = nil) -> Bool {
+        guard !value.isEmpty, value.count <= 80,
+              !store.snapshot.categories.contains(where: { $0.id != id && $0.name.localizedCaseInsensitiveCompare(value) == .orderedSame }) else {
+            store.error = "Use a unique category name between 1 and 80 characters."
+            return false
+        }
+        return true
     }
 }
 
@@ -186,30 +223,62 @@ struct MCAddSourceView: View {
     @State private var categories = Set<UUID>()
     @State private var status = MCPersonalStatus.planned
     @State private var follow = true
+    @State private var title = ""
+    @State private var author = ""
+    @State private var summary = ""
+    @State private var photo: PhotosPickerItem?
+    @State private var cover: MCLibraryCover?
+    @State private var loaded = false
+    @State private var showCategories = false
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationStack {
             Form {
-                Text(manga.title).font(.headline)
-                Picker("Reading status", selection: $status) { ForEach(MCPersonalStatus.allCases) { Text($0.title).tag($0) } }
-                Toggle("Follow new chapters", isOn: $follow)
+                Section("Details") {
+                    TextField("Title", text: $title)
+                    TextField("Author", text: $author)
+                    TextField("Description", text: $summary, axis: .vertical).lineLimit(4...12)
+                    Picker("Reading status", selection: $status) { ForEach(MCPersonalStatus.allCases) { Text($0.title).tag($0) } }
+                    Toggle("Follow new chapters", isOn: $follow)
+                }
+                Section("Cover") {
+                    if let cover, let image = UIImage(data: cover.data) { Image(uiImage: image).resizable().scaledToFit().frame(height: 140) }
+                    PhotosPicker("Choose cover", selection: $photo, matching: .images)
+                }
                 Section("Categories") {
                     ForEach(store.snapshot.categories) { item in
                         Toggle(item.name, isOn: Binding(get: { categories.contains(item.id) }, set: { if $0 { categories.insert(item.id) } else { categories.remove(item.id) } }))
                     }
-                    if store.snapshot.categories.isEmpty { Text("Create categories from Collection → Categories.").foregroundStyle(.secondary) }
+                    Button("Manage categories") { showCategories = true }
                 }
             }.navigationTitle("Add to collection").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                    ToolbarItem(placement: .confirmationAction) { Button("Add") {
-                        do {
-                            _ = try store.add(manga, chapters: chapters, categories: categories, status: status, follow: follow)
-                            Task { await MangaManager.shared.addToLibrary(manga: manga, chapters: chapters) }
-                            dismiss()
-                        } catch { store.error = error.localizedDescription }
-                    } }
-                }.mcErrors(store)
+                    ToolbarItem(placement: .confirmationAction) { Button("Add") { save() }.disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
+                }
+                .task {
+                    guard !loaded else { return }; loaded = true
+                    title = manga.title; summary = manga.description ?? ""; author = manga.authors?.joined(separator: ", ") ?? ""
+                    await store.importLegacyCategories()
+                    if let name = AppSettings.library.defaultCategory.get(), let category = store.snapshot.categories.first(where: { $0.name == name }) { categories = [category.id] }
+                }
+                .onChange(of: photo) { _, value in Task {
+                    do { if let data = try await value?.loadTransferable(type: Data.self) { cover = try store.saveCover(data: data) } }
+                    catch { store.error = error.localizedDescription }
+                } }
+                .sheet(isPresented: $showCategories) { MCCategoriesView() }
+                .mcErrors(store)
         }
+    }
+    private func save() {
+        do {
+            let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            _ = try store.add(manga, chapters: chapters, categories: categories.intersection(Set(store.snapshot.categories.map(\.id))), status: status, follow: follow,
+                              title: title == manga.title ? nil : title,
+                              description: summary == (manga.description ?? "") ? nil : summary,
+                              author: author == (manga.authors?.joined(separator: ", ") ?? "") ? nil : author, cover: cover)
+            Task { await MangaManager.shared.addToLibrary(manga: manga, chapters: chapters) }
+            dismiss()
+        } catch { store.error = error.localizedDescription }
     }
 }
