@@ -85,15 +85,15 @@ struct SourceVerificationTests {
         }
     }
 
-    @Test func completionRequiresFinishedSuccessfulPageAndFreshClearance() {
+    @Test func completionRequiresFinishedPageFreshClearanceAndNoChallenge() {
         var state = SourceVerificationProgress()
         state.navigationStarted()
         let unfinished = state.complete(revision: state.revision, hasFreshClearance: true, pageState: "ready")
         #expect(!unfinished)
         state.received(statusCode: 403)
         state.navigationFinished()
-        let forbidden = state.complete(revision: state.revision, hasFreshClearance: true, pageState: "ready")
-        #expect(!forbidden)
+        let stillChallenged = state.complete(revision: state.revision, hasFreshClearance: true, pageState: "challenge")
+        #expect(!stillChallenged)
         state.received(statusCode: 200)
         for page in [nil, "loading", "challenge", "unavailable"] as [String?] {
             let incompletePage = state.complete(revision: state.revision, hasFreshClearance: true, pageState: page)
@@ -105,6 +105,18 @@ struct SourceVerificationTests {
         #expect(completed)
         let duplicate = state.complete(revision: state.revision, hasFreshClearance: true, pageState: "ready")
         #expect(!duplicate)
+    }
+
+    @Test func clearedPageCanRequestNativeRetryAfterInitial403Response() {
+        var state = SourceVerificationProgress()
+        state.navigationStarted()
+        state.received(statusCode: 403)
+        state.navigationFinished()
+        let missingClearance = state.complete(revision: state.revision, hasFreshClearance: false, pageState: "ready")
+        #expect(!missingClearance)
+        let retry = state.complete(revision: state.revision, hasFreshClearance: true, pageState: "ready")
+        #expect(retry)
+        // The shared coordinator still judges the retry response and never loops.
     }
 
     @Test func delayedCallbacksCannotFinishNewNavigationCancelledOrTimedOutAttempt() {

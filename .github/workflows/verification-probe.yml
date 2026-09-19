@@ -16,10 +16,20 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - name: Build bundled adapters
+        working-directory: Extensions
+        run: npm ci && npm run build
       - name: Observe actual WebKit frames and source verification
         run: |
           cat Midoku/Extensions/Core/ExtensionContract.swift \
               Midoku/Extensions/Core/SourceRequestPolicy.swift \
+              Midoku/Extensions/Core/SourceRequestCoordinator.swift \
+              Midoku/Extensions/Core/URLSessionSourceTransport.swift \
+              Midoku/Extensions/Core/SourceCookiePolicy.swift \
+              Midoku/Extensions/Core/SourceBrowserRules.swift \
               Midoku/Extensions/Core/SourceVerificationPolicy.swift \
+              Midoku/Extensions/Core/JavaScriptExtensionRuntime.swift \
+              Midoku/Extensions/Apple/BrowserSessionStore.swift \
+              Midoku/Extensions/Apple/SourceBrowserRenderer.swift \
               Tools/verification-probe.swift > "$RUNNER_TEMP/verification-probe.swift"
           swift "$RUNNER_TEMP/verification-probe.swift"

@@ -31,6 +31,7 @@ final class VerificationProbe: NSObject, WKNavigationDelegate {
             trace.append([
                 "scheme": url.scheme ?? "none", "host": url.host ?? "none",
                 "aboutKind": aboutKind, "hasQuery": url.query != nil,
+                "localDocument": SourceVerificationPolicy.localDocument(url) ?? "none",
                 "target": action.targetFrame.map { $0.isMainFrame ? "main" : "subframe" } ?? "new-window",
                 "sourceMain": action.sourceFrame.isMainFrame,
                 "sourceHost": action.sourceFrame.securityOrigin.host,
@@ -104,29 +105,66 @@ Task { @MainActor in
         try? await Task.sleep(for: .seconds(5))
         let frames = (try? await web.evaluateJavaScript("window.completedFrames || []")) as? [String] ?? []
         report(["phase": "fixture", "enforced": enforce, "completed": frames.sorted(), "blockedByPolicy": delegate.blocked, "trace": delegate.trace])
+        if enforce, !Set(frames).isSuperset(of: ["srcdoc", "sandboxed-srcdoc", "blob"]) {
+            report(["phase": "fixture", "error": "Required embedded documents failed to execute"])
+            exit(1)
+        }
         web.stopLoading()
         web.navigationDelegate = nil
     }
 
-    // Inspect only the homepage verification flow; no catalogue or image scraping.
+    // Inspect the homepage flow, then one adapter search through the production host.
     guard let url = URL(string: "https://novelcrow.com/") else { exit(1) }
     for enforce in [true, false] {
-        let config = WKWebViewConfiguration()
-        config.websiteDataStore = .nonPersistent()
-        let web = WKWebView(frame: window.contentView?.bounds ?? .zero, configuration: config)
+        let sessions = BrowserSessionStore()
+        let connection = SourceConnection(extensionID: "dev.midoku.novelcrow", name: "NovelCrow probe")
+        do { _ = try await sessions.headers(for: url, connectionID: connection.id) }
+        catch { report(["phase": "live-macos", "error": "Could not initialize browser identity"]); exit(1) }
+        let web = sessions.makeWebView(for: connection.id)
+        web.frame = window.contentView?.bounds ?? .zero
         let delegate = VerificationProbe(host: "novelcrow.com", enforcePolicy: enforce)
         web.navigationDelegate = delegate
         window.contentView = web
         web.load(URLRequest(url: url))
         try? await Task.sleep(for: .seconds(20))
-        let cookies = await config.websiteDataStore.httpCookieStore.allCookies()
+        let cookies = await web.configuration.websiteDataStore.httpCookieStore.allCookies()
         let hasClearance = cookies.contains { $0.name == "cf_clearance" }
         let rawState = (try? await web.evaluateJavaScript(SourceVerificationPolicy.pageStateScript)) as? String
         let state = rawState.flatMap { ["loading", "challenge", "ready"].contains($0) ? $0 : nil } ?? "unavailable"
         report(["phase": "live-macos", "enforced": enforce, "status": delegate.lastStatus ?? 0, "page": state,
                 "hasClearance": hasClearance, "blockedByPolicy": delegate.blocked, "trace": delegate.trace])
+        if enforce {
+            do {
+                var request = URLRequest(url: url)
+                request.cachePolicy = .reloadIgnoringLocalCacheData
+                for (key, value) in try await sessions.headers(for: url, connectionID: connection.id) {
+                    request.setValue(value, forHTTPHeaderField: key)
+                }
+                let transport = URLSessionSourceTransport()
+                let response = try await transport.send(request, maximumBytes: 8 * 1024 * 1024)
+                report(["phase": "native-retry", "status": response.status, "challenge": response.isChallenge])
+                let manifest = try JSONDecoder().decode(ExtensionManifest.self, from: Data(contentsOf:
+                    URL(fileURLWithPath: "Extensions/sources/dev.midoku.novelcrow/manifest.json")))
+                let bundle = try String(contentsOf: URL(fileURLWithPath: "Extensions/dist/dev.midoku.novelcrow/bundle.js"), encoding: .utf8)
+                let coordinator = SourceRequestCoordinator(transport: transport, sessions: sessions,
+                    verification: UnavailableChallengeResolver(), browser: SourceBrowserRenderer(sessions: sessions))
+                let host = NetworkExtensionHost(coordinator: coordinator, connection: connection, manifest: manifest, interaction: .background)
+                let runtime = JavaScriptExtensionRuntime()
+                try await runtime.validate(bundle: bundle, manifest: manifest)
+                let output = try await runtime.invoke(bundle: bundle, method: "search",
+                    input: Data(#"{"query":"One Piece","cursor":null,"filters":{}}"#.utf8), host: host)
+                let page = try JSONDecoder().decode(SourcePage<MangaSummary>.self, from: output)
+                report(["phase": "live-extension-search", "succeeded": true, "itemCount": page.items.count])
+            } catch let error as ExtensionFailure {
+                // Host errors have fixed redacted descriptions. Do not log arbitrary errors or URLs.
+                report(["phase": "live-extension-search", "succeeded": false, "error": error.localizedDescription])
+            } catch {
+                report(["phase": "live-extension-search", "succeeded": false, "error": "Probe could not complete"])
+            }
+        }
         web.stopLoading()
         web.navigationDelegate = nil
+        await sessions.clearSession(for: connection.id)
     }
     exit(0)
 }

@@ -1,3 +1,10 @@
+# Cloudflare revision 4 / actual WebKit regression — 2026-09-19
+
+- The user's revision-3 screenshot still showed HTTP 403, absent clearance, zero local frames and six blocked navigations. The earlier 83 passing Swift tests and archive did not establish live clearance.
+- [Native diagnosis 35452331742](https://github.com/Mohammad-Rahat/Midoku/actions/runs/35452331742) reproduced a mismatch between actual WKNavigationAction URLs and Foundation URL fixtures: the `path` check rejected real `about:blank`/`about:srcdoc` frames. Embedded scripts ran when that filter was removed. The new policy matches the serialized opaque URI, and a native WebKit regression verifies actual nested-frame script execution while still denying data documents and external main navigation.
+- The live macOS probe obtained fresh clearance and a ready DOM while retaining HTTP 403 as its recorded document response. Removed that extra completion gate; the existing single native retry still judges success. The probe now also checks the production cookie/UA handoff and the bundled NovelCrow search.
+- Revision-4 connection details include fixed blocked-frame categories without exposing URLs, cookies or tokens. Native tests, live search and the unsigned archive are pending the new CI run. Physical-device/LiveContainer clearance remains unverified.
+
 # Cloudflare / NovelCrow device follow-up — 2026-09-19
 
 - Compared Aidoku's current native handler at pinned commit `8ae2da15` and Cloudflare's mobile requirements. Corrected the missing `about:srcdoc` frame allowance and stale native Cookie-header replay; these are confirmed defects, not proof of the sole device-loop cause.

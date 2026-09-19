@@ -30,14 +30,38 @@ nonisolated enum SourceVerificationPolicy {
 
         // Turnstile needs both kinds of local frame. Do not send them through the
         // HTTPS-only adapter policy or replace them with a top-level URL load.
-        if url.scheme == "about", url.query == nil,
-           ["blank", "srcdoc"].contains(url.path) { return true }
+        if localDocument(url) != nil { return true }
         let cloudflare = SourceRequestPolicy(domains: ["challenges.cloudflare.com"])
         if (try? cloudflare.validate(url)) != nil { return true }
         if url.scheme == "blob", let origin = URL(string: String(url.absoluteString.dropFirst(5))) {
             return (try? policy.validate(origin)) != nil || (try? cloudflare.validate(origin)) != nil
         }
         return false
+    }
+
+    static func localDocument(_ url: URL) -> String? {
+        // WebKit supplies bridged CFURL/NSURL instances. Their .path can be empty
+        // for opaque about: URLs, unlike URL(string:) values created in unit tests.
+        // Match the serialized URI; never assume an opaque URI has an HTTP path.
+        let document = url.absoluteString.split(separator: "#", maxSplits: 1).first
+        switch document {
+        case "about:blank": return "about:blank"
+        case "about:srcdoc": return "about:srcdoc"
+        default: return nil
+        }
+    }
+
+    static func navigationLabel(_ url: URL, isMainFrame: Bool, policy: SourceRequestPolicy) -> String {
+        let kind: String
+        if let local = localDocument(url) { kind = local }
+        else if url.scheme == "about" { kind = "other about document" }
+        else if url.scheme == "blob" { kind = "blob document" }
+        else if url.scheme == "data" { kind = "data document" }
+        else if (try? policy.validate(url)) != nil { kind = "source HTTPS" }
+        else if url.host == "challenges.cloudflare.com" { kind = "Cloudflare" }
+        else { kind = "outside source permissions" }
+        // Fixed labels only: paths, queries, fragments and credentials never leave the browser.
+        return (isMainFrame ? "main: " : "frame: ") + kind
     }
 
     // Read-only inspection: no injected hooks, spoofed browser APIs or CAPTCHA solving.
@@ -77,7 +101,6 @@ nonisolated struct SourceVerificationProgress {
 
     mutating func complete(revision: Int, hasFreshClearance: Bool, pageState: String?) -> Bool {
         guard isActive, self.revision == revision, hasFinishedNavigation,
-              let statusCode, (200..<300).contains(statusCode),
               hasFreshClearance, pageState == "ready" else { return false }
         stop()
         return true

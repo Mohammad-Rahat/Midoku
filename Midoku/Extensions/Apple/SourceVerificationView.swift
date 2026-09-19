@@ -7,7 +7,7 @@ struct SourceVerificationView: View {
     let coordinator: ChallengeCoordinator
     @State private var attemptID = UUID()
     @State private var status = "Checking website…"
-    @State private var details = "Preparing WebKit verification (revision 3)."
+    @State private var details = "Preparing WebKit verification (revision 4)."
     @State private var loadError: String?
 
     var body: some View {
@@ -50,7 +50,7 @@ struct SourceVerificationView: View {
                     Button("Reload") {
                         loadError = nil
                         status = "Checking website…"
-                        details = "Preparing WebKit verification (revision 3)."
+                        details = "Preparing WebKit verification (revision 4)."
                         attemptID = UUID()
                     }
                 }
@@ -105,6 +105,7 @@ private final class VerificationBrowserController: UIViewController, WKNavigatio
     private var localFrames = 0
     private var cloudflareFrames = 0
     private var blockedNavigations = 0
+    private var blockedLabels: [String] = []
     private var clearanceState = "not checked"
     private var pageState = "loading"
 
@@ -232,7 +233,8 @@ private final class VerificationBrowserController: UIViewController, WKNavigatio
 
     private func publishDetails() {
         let http = progress.statusCode.map(String.init) ?? "pending"
-        onDetails("WebKit verification r3\nHTTP: \(http) · Page: \(pageState)\nClearance: \(clearanceState)\nLocal frames: \(localFrames) · Cloudflare frames: \(cloudflareFrames)\nBlocked navigations: \(blockedNavigations)")
+        let blocked = blockedLabels.isEmpty ? "" : "\n" + blockedLabels.joined(separator: "\n")
+        onDetails("WebKit verification r4\nHTTP: \(http) · Page: \(pageState)\nClearance: \(clearanceState)\nLocal frames: \(localFrames) · Cloudflare frames: \(cloudflareFrames)\nBlocked navigations: \(blockedNavigations)\(blocked)")
     }
 
     private func fail(_ message: String) {
@@ -260,6 +262,8 @@ private final class VerificationBrowserController: UIViewController, WKNavigatio
         let isMainFrame = action.targetFrame?.isMainFrame ?? true
         guard SourceVerificationPolicy.allowsNavigation(to: url, isMainFrame: isMainFrame, policy: challenge.policy) else {
             blockedNavigations += 1
+            let label = SourceVerificationPolicy.navigationLabel(url, isMainFrame: isMainFrame, policy: challenge.policy)
+            if !blockedLabels.contains(label), blockedLabels.count < 3 { blockedLabels.append(label) }
             publishDetails()
             return .cancel
         }
