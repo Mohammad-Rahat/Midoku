@@ -14,9 +14,12 @@ final class SourceBrowserRenderer: SourceBrowserRendering {
         let navigation = BrowserNavigation(policy: policy)
         view.navigationDelegate = navigation
         // No third-party browsing or trackers are required for adapter extraction.
-        let hosts = policy.domains.map { $0.hasPrefix("*.") ? "*" + $0.dropFirst() : $0 } + ["challenges.cloudflare.com"]
+        let allowedHosts = (policy.domains + ["challenges.cloudflare.com"]).map { domain in
+            domain.hasPrefix("*.") ? "([a-z0-9-]+\\.)+" + NSRegularExpression.escapedPattern(for: String(domain.dropFirst(2))) : NSRegularExpression.escapedPattern(for: domain)
+        }.joined(separator: "|")
         let rules: [[String: Any]] = [
-            ["trigger": ["url-filter": ".*", "unless-domain": hosts], "action": ["type": "block"]],
+            ["trigger": ["url-filter": ".*"], "action": ["type": "block"]],
+            ["trigger": ["url-filter": "^https://(" + allowedHosts + ")(:443)?/"], "action": ["type": "ignore-previous-rules"]],
             ["trigger": ["url-filter": ".*", "resource-type": ["image", "media", "font"]], "action": ["type": "block"]]
         ]
         let encoded = try JSONSerialization.data(withJSONObject: rules)
