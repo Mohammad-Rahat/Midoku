@@ -73,6 +73,7 @@ actor SourceRequestCoordinator {
         var hasVerified = false
         var redirectCount = 0
         var currentURL = input.url
+        var imageAttempts: Set<URL> = [input.url]
         while true {
             try Task.checkCancellation()
             try policy.validate(currentURL)
@@ -121,6 +122,23 @@ actor SourceRequestCoordinator {
                 redirectCount += 1
                 currentURL = redirected
                 continue
+            }
+            if response.status == 404, kind != .metadata, manifest.imageProcessing == "comix-v1" {
+                let prefixes = ["i5", "si", "i", "sii", "ii"]
+                let segments = currentURL.path.split(separator: "/").map(String.init)
+                if let first = segments.first, prefixes.contains(first), segments.count > 1,
+                   var components = URLComponents(url: currentURL, resolvingAgainstBaseURL: false) {
+                    var alternative: URL?
+                    for prefix in prefixes {
+                        components.path = "/" + ([prefix] + segments.dropFirst()).joined(separator: "/")
+                        if let candidate = components.url, !imageAttempts.contains(candidate) { alternative = candidate; break }
+                    }
+                    if let alternative {
+                        try policy.validate(alternative)
+                        imageAttempts.insert(alternative); currentURL = alternative
+                        continue
+                    }
+                }
             }
             if response.status == 429 {
                 let delay = response.header("retry-after").flatMap(Double.init) ?? 30

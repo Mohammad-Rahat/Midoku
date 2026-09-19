@@ -30,7 +30,12 @@ final class SourceBrowserRenderer: SourceBrowserRendering {
             view.stopLoading(); view.navigationDelegate = nil
             view.configuration.userContentController.removeAllUserScripts()
         }
-        view.loadHTMLString(String(decoding: response.body, as: UTF8.self), baseURL: response.url)
+        // Keep module locators available to the reviewed extractor without starting the
+        // website UI, its unsolicited catalogue queries, or advertisement initialization.
+        let html = String(decoding: response.body, as: UTF8.self)
+            .replacingOccurrences(of: "type=\"module\"", with: "type=\"application/x-midoku-module\"")
+            .replacingOccurrences(of: "type='module'", with: "type='application/x-midoku-module'")
+        view.loadHTMLString(html, baseURL: response.url)
         let deadline = ContinuousClock.now.advanced(by: .seconds(45))
         while ContinuousClock.now < deadline {
             try Task.checkCancellation()

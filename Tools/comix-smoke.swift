@@ -12,7 +12,7 @@ window.contentView = web
 window.orderFrontRegardless()
 let script = #"""
 (async()=>{try{
- const main=new URL(document.querySelector('script[type="module"][src*="/main-"]').src);
+ const main=new URL(document.querySelector('script[src*="/main-"]').src);
  const text=await(await fetch(main)).text();const name=text.match(/from\s*["']\.\/(env-[^"']+\.js)["']/)[1];
  const env=await import(new URL(name,main).href),values=Object.values(env);
  const api=values.find(x=>x&&typeof x.list==='function'&&typeof x.chapters==='function');
@@ -29,7 +29,7 @@ let script = #"""
  const pages=chapter.pages,items=Array.isArray(pages)?pages:pages.items;
  const urls=items.map(x=>x.url.startsWith('http')?x.url:(pages.baseUrl||'').replace(/\/$/,'')+'/'+x.url.replace(/^\//,''));
  window.smokeResult=JSON.stringify({ok:true,listKeys:Object.keys(list),meta:list.meta||list.pagination,mangaKeys:Object.keys(detail),chapterKeys:Object.keys(chapter),chapterListKeys:Object.keys(chapters.items[0]),pageKeys:Object.keys(items[0]),hosts:[...new Set([item.poster?.medium,...urls].filter(Boolean).map(x=>new URL(x).hostname))]});
-}catch(e){window.smokeResult=JSON.stringify({ok:false,error:String(e)});}})();
+}catch(e){window.smokeResult=JSON.stringify({ok:false,error:String(e)});}})();void 0;
 """#
 final class Navigation: NSObject, WKNavigationDelegate {
     var started = false
@@ -40,7 +40,15 @@ final class Navigation: NSObject, WKNavigationDelegate {
 }
 let navigation = Navigation(); web.navigationDelegate = navigation
 guard let sourceURL = URL(string: "https://comix.to/browse") else { exit(1) }
-web.load(URLRequest(url: sourceURL))
+Task { @MainActor in
+    do {
+        let (data, _) = try await URLSession.shared.data(from: sourceURL)
+        let rules = #"[{"trigger":{"url-filter":".*"},"action":{"type":"block"}},{"trigger":{"url-filter":"^https://(comix\\.to|comix\\.ws|static\\.comix\\.to|([a-z0-9-]+\\.)+wowpic2\\.store|challenges\\.cloudflare\\.com)(:443)?/"},"action":{"type":"ignore-previous-rules"}},{"trigger":{"url-filter":".*","resource-type":["image","media","font"]},"action":{"type":"block"}}]"#
+        if let blocker = try await WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "midoku-comix-smoke", encodedContentRuleList: rules) { web.configuration.userContentController.add(blocker) }
+        let html = String(decoding: data, as: UTF8.self).replacingOccurrences(of: "type=\"module\"", with: "type=\"application/x-midoku-module\"")
+        web.loadHTMLString(html, baseURL: sourceURL)
+    } catch { print("Smoke setup failed:", error.localizedDescription); exit(1) }
+}
 Task { @MainActor in
     let deadline = Date().addingTimeInterval(90)
     while Date() < deadline {

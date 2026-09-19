@@ -136,10 +136,12 @@ struct SourceChapterReader: View {
         VStack(spacing: 0) {
             if selectedPage == 0 { ReaderChapterBoundary(forward: false) }
             if pages.indices.contains(selectedPage) {
-                ReaderPageImage(index: selectedPage, viewport: viewport, preferences: preferences, continuous: false,
+                GeometryReader { pageGeometry in
+                ReaderPageImage(index: selectedPage, viewport: pageGeometry.size, preferences: preferences, continuous: false,
                     tap: tapped, loaded: { loadedPages.insert(pages[selectedPage].id); savePosition() }, imageLoader: { try await loadImage(pages[selectedPage]) },
                     swipe: { delta in jump(to: selectedPage + delta) }, identity: identity)
                     .id(pages[selectedPage].id)
+                }
             }
             if selectedPage == pages.count - 1 { ReaderChapterBoundary(forward: true) }
         }
@@ -315,7 +317,7 @@ struct ReaderPageImage: View {
             NavigationStack {
                 GeometryReader { geometry in
                     ReaderPageImage(index: index, viewport: geometry.size, preferences: preferences,
-                                    continuous: false, tap: { _ in }, loaded: {}, imageLoader: imageLoader)
+                                    continuous: false, tap: { _ in }, loaded: {}, imageLoader: imageLoader, identity: identity)
                 }
                 .navigationTitle("Page \(index + 1)")
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { zoomSheet = false } } }

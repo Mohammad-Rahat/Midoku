@@ -412,7 +412,7 @@ var MidokuExtension = (() => {
 
 """#),
         (manifestJSON: #"""
-{"id":"dev.midoku.comix","name":"Comix","version":"0.1.0","contractVersion":2,"domains":["comix.to","comix.ws"],"capabilities":["search","feeds","details","chapters","pages","filters"],"browserRendering":true,"imageProcessing":"comix-v1"}
+{"id":"dev.midoku.comix","name":"Comix","version":"0.1.0","contractVersion":2,"domains":["comix.to","comix.ws","static.comix.to","*.wowpic2.store"],"capabilities":["search","feeds","details","chapters","pages","filters"],"browserRendering":true,"imageProcessing":"comix-v1"}
 """#, javaScript: #"""
 var MidokuExtension = (() => {
   var __defProp = Object.defineProperty;
@@ -452,7 +452,7 @@ var MidokuExtension = (() => {
   }
   function page(value) {
     if (value == null) return 1;
-    if (!/^[1-9][0-9]{0,3}$/.test(value)) throw Error("Invalid cursor");
+    if (!/^[1-9][0-9]{0,5}$/.test(value)) throw Error("Invalid cursor");
     return Number(value);
   }
   function object(value) {
@@ -485,7 +485,7 @@ var MidokuExtension = (() => {
       };
       const run = async () => { try {
         const origin = new URL(document.baseURI).origin;
-        const main = document.querySelector('script[type="module"][src*="/main-"]');
+        const main = document.querySelector('script[src*="/main-"]');
         if (!main) throw Error('Website module missing');
         const moduleURL = new URL(main.getAttribute('src'), document.baseURI);
         if (moduleURL.origin !== origin) throw Error('Invalid module origin');
@@ -511,7 +511,7 @@ var MidokuExtension = (() => {
           else if (${JSON.stringify(operation)} === 'chapters') result = await manga.chapters(args.mangaID,{page:args.page,limit:100,order:{number:'asc'}});
           else { if (!http) throw Error('Reader API unavailable'); result = await http.get('/chapters/' + args.chapterID);
             const parent = result.manga?.hid ?? result.mangaHid ?? result.manga_hid;
-            if (parent && parent !== args.mangaID) throw Error('Chapter does not belong to entry');
+            if ((parent && parent !== args.mangaID) || (result.mangaId != null && entry.id != null && String(result.mangaId) !== String(entry.id))) throw Error('Chapter does not belong to entry');
           }
         }
         if (!window.__midokuResult) window.__midokuResult = JSON.stringify({result});

@@ -301,3 +301,52 @@ struct VerificationPresentationTests {
         #expect(coordinator.current == nil)
     }
 }
+
+
+private actor StubBrowser: SourceBrowserRendering {
+    var calls = 0
+    let alwaysChallenge: Bool
+    init(alwaysChallenge: Bool = false) { self.alwaysChallenge = alwaysChallenge }
+    func render(_ response: SourceHTTPResponse, script: String, connection: SourceConnection, policy: SourceRequestPolicy) async throws -> SourceHTTPResponse {
+        calls += 1
+        if calls == 1 || alwaysChallenge { throw ExtensionFailure.verificationRequired }
+        return SourceHTTPResponse(url: response.url, status: 200, headers: [:], body: Data("{}".utf8))
+    }
+}
+@Suite("Browser extraction verification")
+struct BrowserExtractionTests {
+    @Test func foregroundRetriesOnceAndBackgroundNeverPrompts() async throws {
+        let url = try #require(URL(string: "https://example.com/browse"))
+        let html = SourceHTTPResponse(url: url, status: 200, headers: [:], body: Data("<html/>".utf8))
+        let permitted = ExtensionManifest(id: "dev.midoku.tests", name: "Test", version: "1.0.0", contractVersion: 2,
+            domains: ["example.com"], capabilities: [.search], browserRendering: true)
+        for interaction in [VerificationInteraction.foreground, .background] {
+            let session = StubSession(), browser = StubBrowser(), transport = StubTransport([html, html])
+            let resolver = StubResolver(session: session)
+            let coordinator = SourceRequestCoordinator(transport: transport, sessions: session, verification: resolver, minimumSpacing: .zero, browser: browser)
+            let request = SourceHTTPRequest(url: url, headers: [:], browserScript: "window.__midokuResult='{}'")
+            let connection = SourceConnection(extensionID: permitted.id, name: "Test")
+            if interaction == .foreground {
+                #expect(try await coordinator.request(request, connection: connection, manifest: permitted, interaction: interaction).status == 200)
+                #expect(await resolver.count == 1)
+                #expect(await browser.calls == 2)
+            } else {
+                await #expect(throws: ExtensionFailure.verificationRequired) {
+                    try await coordinator.request(request, connection: connection, manifest: permitted, interaction: interaction)
+                }
+                #expect(await resolver.count == 0)
+                #expect(await browser.calls == 1)
+            }
+        }
+    }
+    @Test func browserRequiresExplicitManifestPermission() async throws {
+        let url = try #require(URL(string: "https://example.com"))
+        let transport = StubTransport([])
+        let coordinator = SourceRequestCoordinator(transport: transport, sessions: EmptySourceSession(), verification: UnavailableChallengeResolver(), browser: StubBrowser())
+        await #expect(throws: ExtensionFailure.requestNotAllowed) {
+            try await coordinator.request(SourceHTTPRequest(url: url, headers: [:], browserScript: "window.__midokuResult='{}'"),
+                connection: SourceConnection(extensionID: manifest().id, name: "Test"), manifest: manifest(), interaction: .foreground)
+        }
+        #expect(await transport.requests.isEmpty)
+    }
+}

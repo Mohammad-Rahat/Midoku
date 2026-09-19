@@ -7,7 +7,7 @@ function id(value: unknown, chapter = false): string {
 }
 function page(value?: string | null): number {
     if (value == null) return 1;
-    if (!/^[1-9][0-9]{0,3}$/.test(value)) throw Error("Invalid cursor");
+    if (!/^[1-9][0-9]{0,5}$/.test(value)) throw Error("Invalid cursor");
     return Number(value);
 }
 function object(value: any): any { if (!value || typeof value !== "object" || Array.isArray(value)) throw Error("Invalid Comix response"); return value; }
@@ -31,7 +31,7 @@ function script(operation: string, args: any): string {
       };
       const run = async () => { try {
         const origin = new URL(document.baseURI).origin;
-        const main = document.querySelector('script[type="module"][src*="/main-"]');
+        const main = document.querySelector('script[src*="/main-"]');
         if (!main) throw Error('Website module missing');
         const moduleURL = new URL(main.getAttribute('src'), document.baseURI);
         if (moduleURL.origin !== origin) throw Error('Invalid module origin');
@@ -57,7 +57,7 @@ function script(operation: string, args: any): string {
           else if (${JSON.stringify(operation)} === 'chapters') result = await manga.chapters(args.mangaID,{page:args.page,limit:100,order:{number:'asc'}});
           else { if (!http) throw Error('Reader API unavailable'); result = await http.get('/chapters/' + args.chapterID);
             const parent = result.manga?.hid ?? result.mangaHid ?? result.manga_hid;
-            if (parent && parent !== args.mangaID) throw Error('Chapter does not belong to entry');
+            if ((parent && parent !== args.mangaID) || (result.mangaId != null && entry.id != null && String(result.mangaId) !== String(entry.id))) throw Error('Chapter does not belong to entry');
           }
         }
         if (!window.__midokuResult) window.__midokuResult = JSON.stringify({result});

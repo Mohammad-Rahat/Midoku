@@ -186,7 +186,9 @@ struct OfflineChapterReader: View {
                 } else if download.pages.indices.contains(selected) {
                     VStack(spacing: 0) {
                         if selected == 0 { ReaderChapterBoundary(forward: false) }
-                        image(download.pages[selected], index: selected, size: geometry.size, continuous: false).id(selected)
+                        GeometryReader { pageGeometry in
+                            image(download.pages[selected], index: selected, size: pageGeometry.size, continuous: false).id(selected)
+                        }
                         if selected == download.pages.count - 1 { ReaderChapterBoundary(forward: true) }
                     }
                 }
