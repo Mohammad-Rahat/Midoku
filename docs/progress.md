@@ -385,3 +385,5 @@ contract. esbuild still performs the TypeScript compilation and bundling.
 - Browse includes global search, with independent per-source results/errors. Source, global and library text search run on keyboard submission, preserving results while typing.
 - Reset details restores source metadata, covers, chapter edits, reader defaults and automatic ordering, while preserving chapter identities, imported sources, exclusions, categories and progress.
 - Added cache persistence/eviction/clearing, partial-add persistence/full refresh, history migration and mixed-source reset regression tests. Local extension checks pass (21 tests); native verification and simulator layout review run in the IPA workflow.
+
+- Native verification passed all 60 Swift tests and 21 extension tests. Simulator review confirmed the compact title headers and stable reader page frame, and caught a status-area overlap in reader chrome; controls now read safe-area insets from a separate outer container. The Settings boundary preview explicitly scrolls to the last row.

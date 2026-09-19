@@ -88,6 +88,7 @@ struct SettingsView: View {
     let extensions: ExtensionEnvironment
     @Environment(AppSettingsStore.self) private var settings
     var body: some View {
+        ScrollViewReader { proxy in
         List {
             Section("Personalize") {
                 NavigationLink { AppearanceSettingsView() } label: {
@@ -127,11 +128,18 @@ struct SettingsView: View {
                 NavigationLink("Extension Lab") { ExtensionLabView() }
             }.listRowBackground(MidokuTheme.surface)
             #endif
+            Color.clear.frame(height: 1).id("settings-end").listRowBackground(Color.clear).listRowSeparator(.hidden)
         }
-        #if DEBUG
-        .defaultScrollAnchor(CommandLine.arguments.contains("--settings-bottom-preview") ? .bottom : .top)
-        #endif
         .settingsStyle(largeTitle: true).contentMargins(.top, 0, for: .scrollContent).mainScreenHeader("Settings")
+        #if DEBUG
+        .task {
+            if CommandLine.arguments.contains("--settings-bottom-preview") {
+                try? await Task.sleep(for: .milliseconds(500))
+                proxy.scrollTo("settings-end", anchor: .bottom)
+            }
+        }
+        #endif
+        }
     }
 }
 

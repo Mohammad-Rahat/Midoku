@@ -10,6 +10,7 @@ struct ReaderChrome<Pages: View, Controls: View>: View {
     @ViewBuilder var controls: () -> Controls
     @Environment(\.dismiss) private var dismiss
     var body: some View {
+        GeometryReader { safeArea in
         GeometryReader { geometry in
             pages(geometry.size)
                 .frame(width: geometry.size.width, height: geometry.size.height)
@@ -23,17 +24,18 @@ struct ReaderChrome<Pages: View, Controls: View>: View {
                         Button(action: preferences) { Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44) }.accessibilityLabel("Reader preferences")
                     }
                     .buttonStyle(.plain).padding(.horizontal, 8).padding(.bottom, 6)
-                    .padding(.top, geometry.safeAreaInsets.top)
+                    .padding(.top, safeArea.safeAreaInsets.top)
                     .background(MidokuTheme.surface)
                     .opacity(visible ? 1 : 0).allowsHitTesting(visible).accessibilityHidden(!visible)
                 }
                 .overlay(alignment: .bottom) {
-                    controls().padding(.bottom, geometry.safeAreaInsets.bottom)
+                    controls().padding(.bottom, safeArea.safeAreaInsets.bottom)
                         .background(MidokuTheme.surface)
                         .opacity(visible ? 1 : 0).allowsHitTesting(visible).accessibilityHidden(!visible)
                 }
         }
         .ignoresSafeArea(.container)
+        }
         .toolbar(.hidden, for: .navigationBar, .tabBar)
         .statusBarHidden(!visible)
         .modifier(ReaderBackGesture())
