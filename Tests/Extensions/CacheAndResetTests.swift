@@ -40,7 +40,7 @@ struct CacheAndResetTests {
         // An earlier Browse/copy operation may have remembered the full list.
         _ = try state.library.remember(details: details, connectionID: source.id, records: records, complete: true)
         let id = try state.library.add(details: details, connectionID: source.id, records: [records[0]], language: "en", complete: false)
-        #expect(state.library.chapters.allSatisfy(\.available))
+        #expect(state.library.chapters.allSatisfy { $0.available })
         let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         let store = SettingsPersistence(fileURL: root.appending(path: "library.sqlite"))
