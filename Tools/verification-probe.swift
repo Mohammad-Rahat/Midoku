@@ -101,6 +101,37 @@ window.onload = () => {
 """#
 
 Task { @MainActor in
+    // Real WK stores, not dictionary-only session fixtures. Verify profile reuse,
+    // separate connection jars, native header handoff and connection-local reset.
+    do {
+        let sessions = BrowserSessionStore(profileMode: .temporary)
+        let first = UUID(), second = UUID()
+        let firstStore = sessions.dataStore(for: first)
+        let secondStore = sessions.dataStore(for: second)
+        guard !firstStore.isPersistent, firstStore !== secondStore,
+              sessions.makeWebView(for: first).configuration.websiteDataStore === firstStore,
+              sessions.makeWebView(for: second).configuration.websiteDataStore === secondStore,
+              let url = URL(string: "https://example.com/") else { exit(1) }
+        for (id, value) in [(first, "fixture-first"), (second, "fixture-second")] {
+            guard let cookie = HTTPCookie(properties: [.name: "cf_clearance", .value: value,
+                .domain: ".example.com", .path: "/", .secure: "TRUE", .expires: Date.distantFuture]) else { exit(1) }
+            await sessions.dataStore(for: id).httpCookieStore.setCookie(cookie)
+        }
+        let firstHeaders = try await sessions.headers(for: url, connectionID: first)
+        let secondHeaders = try await sessions.headers(for: url, connectionID: second)
+        guard firstHeaders["Cookie"] == "cf_clearance=fixture-first",
+              secondHeaders["Cookie"] == "cf_clearance=fixture-second",
+              firstHeaders["User-Agent"] == secondHeaders["User-Agent"] else { exit(1) }
+        await sessions.clearSession(for: first)
+        let cleared = try await sessions.headers(for: url, connectionID: first)
+        let preserved = try await sessions.headers(for: url, connectionID: second)
+        guard cleared["Cookie"]?.contains("cf_clearance=") != true,
+              preserved["Cookie"] == "cf_clearance=fixture-second" else { exit(1) }
+        await sessions.clearSession(for: second)
+        report(["phase": "connection-memory-sessions", "succeeded": true])
+    } catch {
+        report(["phase": "connection-memory-sessions", "succeeded": false]); exit(1)
+    }
     for enforce in [true, false] {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .nonPersistent()
@@ -123,8 +154,8 @@ Task { @MainActor in
 
     // Use the same feed URL as the app, with controlled request/profile comparisons.
     guard let url = URL(string: "https://novelcrow.com/?s=&post_type=wp-manga&m_orderby=trending") else { exit(1) }
-    for mode in ["profile-original-request", "profile-default-request", "ephemeral-default-request"] {
-        let sessions = BrowserSessionStore()
+    for mode in ["profile-original-request", "memory-original-request", "ephemeral-default-request"] {
+        let sessions = BrowserSessionStore(profileMode: mode == "memory-original-request" ? .temporary : .persistent)
         let connection = SourceConnection(extensionID: "dev.midoku.novelcrow", name: "NovelCrow probe")
         var initialHeaders: [String: String] = [:]
         do { initialHeaders = try await sessions.headers(for: url, connectionID: connection.id) }
@@ -142,7 +173,7 @@ Task { @MainActor in
         web.navigationDelegate = delegate
         window.contentView = web
         var browserRequest = URLRequest(url: url)
-        if mode == "profile-original-request" {
+        if mode == "profile-original-request" || mode == "memory-original-request" {
             initialHeaders["Accept"] = "text/html"
             initialHeaders["Referer"] = "https://novelcrow.com/"
             let challenge = SourceChallenge(connection: connection, url: url, policy: delegate.policy, headers: initialHeaders)

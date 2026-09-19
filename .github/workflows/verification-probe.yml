@@ -26,6 +26,7 @@ jobs:
               Midoku/Extensions/Core/SourceRequestCoordinator.swift \
               Midoku/Extensions/Core/URLSessionSourceTransport.swift \
               Midoku/Extensions/Core/SourceCookiePolicy.swift \
+              Midoku/Extensions/Core/SourceBrowserProfileMode.swift \
               Midoku/Extensions/Core/SourceBrowserRules.swift \
               Midoku/Extensions/Core/SourceVerificationPolicy.swift \
               Midoku/Extensions/Core/JavaScriptExtensionRuntime.swift \

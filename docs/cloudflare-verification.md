@@ -1,5 +1,44 @@
 # Cloudflare verification follow-up
 
+## Revision 5: LiveContainer session compatibility and recovery
+
+The user confirmed Aidoku and Midoku both run inside LiveContainer. Revision 4 now
+shows fresh clearance and zero blocked frames on the device, but the verification
+document cycles between its widget and loading state. This is not a successful
+source check. The exact-feed probe at commit `0b4da5e` compared original headers,
+browser-default headers and an ordinary ephemeral browser. All received 403 on the
+Mac runner, with one main document load and no challenge DOM. Native requests did
+send clearance. That runner does not reproduce the phone's challenge loop.
+
+Aidoku uses a default WebKit store; Midoku used named persistent stores. LiveContainer
+documents WebKit cookie storage failures in [issue 888](https://github.com/LiveContainer/LiveContainer/issues/888),
+and its [filesystem workaround](https://github.com/LiveContainer/LiveContainer/blob/4dbe0f9a626de801184a42c0be8d2cb105058e3d/LiveContainer/Tweaks/NSFileManager%2BGuestHooks.m)
+depends on cookie directory paths and sandbox bookmarks. This identifies a relevant
+compatibility difference, not proof of the remaining device failure's exact cause.
+
+Revision 5 detects the guest environment using the presence of `LC_HOME_PATH` or
+`LP_HOME_PATH` (never recording their values). In that environment, every source
+connection receives its own retained nonpersistent WKWebsiteDataStore. Verification,
+extraction and native metadata/images use that same store. Normally installed builds
+keep their named persistent profiles. Existing persistent data is not removed or
+copied into a shared store. Temporary sessions end on app termination, so sources
+may require verification again after relaunch. The sheet states this limitation.
+
+Fresh matching clearance enables **Try request**, even while the browser continues
+loading. The action asks the existing coordinator for its one allowed native retry;
+it does not claim that Cloudflare passed. Automatic completion still requires a
+finished non-challenge page. A second challenge remains an error and cannot reopen
+verification within that request. Long-press the action to reload verification.
+When verification errors or reaches its 90-second deadline, the view removes the
+browser document and displays recovery controls instead of leaving its loader visible.
+
+Regression coverage checks runtime profile selection and the actual presentation
+coordinator's manual retry, including rejection after the second challenge. The Mac
+probe checks real memory-store reuse, connection isolation, native cookie headers
+and clearing one connection without clearing another. The next live probe compares
+the production memory-store configuration with the persistent configuration. These
+checks do not establish successful iPhone/LiveContainer clearance.
+
 ## Reference and confirmed differences
 
 Read Aidoku's [CloudflareHandler.swift](https://github.com/Aidoku/Aidoku/blob/8ae2da15d9edef05d0e6f27e0799c629883d0890/Aidoku/Core/Sources/Cloudflare/CloudflareHandler.swift),

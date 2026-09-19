@@ -1,15 +1,20 @@
 import Foundation
 import WebKit
 
-/// WebKit persists each profile separately. No cookies enter UserDefaults or adapter JS.
+/// Retain one browser profile per connection. No global cookie store or adapter secrets.
 @MainActor
 final class BrowserSessionStore: SourceSessionProviding {
+    let profileMode: SourceBrowserProfileMode
     private var profiles: [UUID: WKWebsiteDataStore] = [:]
     private var userAgents: [UUID: String] = [:]
 
+    init(profileMode: SourceBrowserProfileMode = .current) {
+        self.profileMode = profileMode
+    }
+
     func dataStore(for connectionID: UUID) -> WKWebsiteDataStore {
         if let profile = profiles[connectionID] { return profile }
-        let profile = WKWebsiteDataStore(forIdentifier: connectionID)
+        let profile = profileMode == .temporary ? WKWebsiteDataStore.nonPersistent() : WKWebsiteDataStore(forIdentifier: connectionID)
         profiles[connectionID] = profile
         return profile
     }

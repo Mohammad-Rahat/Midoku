@@ -7,8 +7,9 @@ struct SourceVerificationView: View {
     let coordinator: ChallengeCoordinator
     @State private var attemptID = UUID()
     @State private var status = "Checking website…"
-    @State private var details = "Preparing WebKit verification (revision 4)."
+    @State private var details = "Preparing WebKit verification (revision 5)."
     @State private var loadError: String?
+    @State private var canTryRequest = false
 
     var body: some View {
         NavigationStack {
@@ -18,6 +19,10 @@ struct SourceVerificationView: View {
                         .font(.headline)
                         .textSelection(.enabled)
                     Text(status).font(.subheadline).foregroundStyle(.secondary)
+                    if sessions.profileMode == .temporary {
+                        Text("This browser session lasts until you close the app.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     if let loadError {
                         Text(loadError).font(.footnote).foregroundStyle(.red)
                     }
@@ -30,15 +35,28 @@ struct SourceVerificationView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding()
                 Divider()
-                VerificationBrowser(
-                    challenge: challenge,
-                    sessions: sessions,
-                    onVerified: { coordinator.retry(id: challenge.id) },
-                    onStatus: { status = $0 },
-                    onDetails: { details = $0 },
-                    onError: { loadError = $0 }
-                )
-                .id(attemptID)
+                if loadError != nil {
+                    // Removing the representable releases the looping document,
+                    // including its timers. stopLoading alone does not stop scripts.
+                    ContentUnavailableView {
+                        Label("Verification paused", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        Text("Start another verification attempt when you’re ready.")
+                    } actions: {
+                        Button("Reload verification") { reload() }
+                    }
+                } else {
+                    VerificationBrowser(
+                        challenge: challenge,
+                        sessions: sessions,
+                        onVerified: { coordinator.retry(id: challenge.id) },
+                        onCanTryRequest: { canTryRequest = $0 },
+                        onStatus: { status = $0 },
+                        onDetails: { details = $0 },
+                        onError: { loadError = $0 }
+                    )
+                    .id(attemptID)
+                }
             }
             .navigationTitle("Verify source")
             .navigationBarTitleDisplayMode(.inline)
@@ -47,16 +65,28 @@ struct SourceVerificationView: View {
                     Button("Cancel") { coordinator.cancel(id: challenge.id) }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Reload") {
-                        loadError = nil
-                        status = "Checking website…"
-                        details = "Preparing WebKit verification (revision 4)."
-                        attemptID = UUID()
+                    Menu {
+                        Button("Try request") { coordinator.retry(id: challenge.id) }
+                            .disabled(!canTryRequest)
+                        Button("Reload verification") { reload() }
+                    } label: {
+                        Text(canTryRequest ? "Try request" : "Reload")
+                    } primaryAction: {
+                        if canTryRequest { coordinator.retry(id: challenge.id) }
+                        else { reload() }
                     }
                 }
             }
         }
         .interactiveDismissDisabled()
+    }
+
+    private func reload() {
+        loadError = nil
+        canTryRequest = false
+        status = "Checking website…"
+        details = "Preparing WebKit verification (revision 5)."
+        attemptID = UUID()
     }
 }
 
@@ -64,13 +94,14 @@ private struct VerificationBrowser: UIViewControllerRepresentable {
     let challenge: SourceChallenge
     let sessions: BrowserSessionStore
     let onVerified: () -> Void
+    let onCanTryRequest: (Bool) -> Void
     let onStatus: (String) -> Void
     let onDetails: (String) -> Void
     let onError: (String) -> Void
 
     func makeUIViewController(context: Context) -> VerificationBrowserController {
         VerificationBrowserController(
-            challenge: challenge, sessions: sessions, onVerified: onVerified,
+            challenge: challenge, sessions: sessions, onVerified: onVerified, onCanTryRequest: onCanTryRequest,
             onStatus: onStatus, onDetails: onDetails, onError: onError
         )
     }
@@ -90,6 +121,7 @@ private final class VerificationBrowserController: UIViewController, WKNavigatio
     private let challenge: SourceChallenge
     private let sessions: BrowserSessionStore
     private let onVerified: () -> Void
+    private let onCanTryRequest: (Bool) -> Void
     private let onStatus: (String) -> Void
     private let onDetails: (String) -> Void
     private let onError: (String) -> Void
@@ -111,12 +143,13 @@ private final class VerificationBrowserController: UIViewController, WKNavigatio
 
     init(
         challenge: SourceChallenge, sessions: BrowserSessionStore,
-        onVerified: @escaping () -> Void, onStatus: @escaping (String) -> Void,
+        onVerified: @escaping () -> Void, onCanTryRequest: @escaping (Bool) -> Void, onStatus: @escaping (String) -> Void,
         onDetails: @escaping (String) -> Void, onError: @escaping (String) -> Void
     ) {
         self.challenge = challenge
         self.sessions = sessions
         self.onVerified = onVerified
+        self.onCanTryRequest = onCanTryRequest
         self.onStatus = onStatus
         self.onDetails = onDetails
         self.onError = onError
@@ -205,17 +238,24 @@ private final class VerificationBrowserController: UIViewController, WKNavigatio
     }
 
     private func checkCompletion(in webView: WKWebView) async {
-        guard progress.isActive, progress.hasFinishedNavigation, !webView.isLoading,
+        guard progress.isActive,
               webView.url?.host?.lowercased() == challenge.url.host?.lowercased() else { return }
         let revision = progress.revision
         let cookies = await webView.configuration.websiteDataStore.httpCookieStore.allCookies()
-        guard progress.isActive, progress.revision == revision, !Task.isCancelled else { return }
+        guard progress.isActive, !Task.isCancelled else { return }
         let fresh = SourceCookiePolicy.hasFreshCloudflareClearance(
             in: cookies, for: challenge.url, previousValues: previousClearanceValues
         )
         clearanceState = fresh ? "new" : (cookies.contains {
             $0.name == "cf_clearance" && SourceCookiePolicy.matches($0, url: challenge.url)
         } ? "unchanged" : "absent")
+        // This enables an explicit one-time native retry; it does not assert that
+        // Cloudflare passed. Automatic completion still requires a finished page.
+        onCanTryRequest(fresh)
+        guard progress.revision == revision, progress.hasFinishedNavigation, !webView.isLoading else {
+            publishDetails()
+            return
+        }
         let result = try? await webView.evaluateJavaScript(SourceVerificationPolicy.pageStateScript)
         guard progress.isActive, progress.revision == revision, !Task.isCancelled else { return }
         pageState = (result as? String).flatMap {
@@ -226,7 +266,7 @@ private final class VerificationBrowserController: UIViewController, WKNavigatio
             timeoutTask?.cancel()
             // Native metadata, images and browser extraction all read this same jar.
             // The request coordinator still retries only once and judges that response.
-            onStatus("Verification finished. Retrying request…")
+            onStatus("Checking source access…")
             onVerified()
         }
     }
@@ -234,7 +274,7 @@ private final class VerificationBrowserController: UIViewController, WKNavigatio
     private func publishDetails() {
         let http = progress.statusCode.map(String.init) ?? "pending"
         let blocked = blockedLabels.isEmpty ? "" : "\n" + blockedLabels.joined(separator: "\n")
-        onDetails("WebKit verification r4\nHTTP: \(http) · Page: \(pageState)\nClearance: \(clearanceState)\nLocal frames: \(localFrames) · Cloudflare frames: \(cloudflareFrames)\nBlocked navigations: \(blockedNavigations)\(blocked)")
+        onDetails("WebKit verification r5\nSession: \(sessions.profileMode.diagnosticName)\nHTTP: \(http) · Page: \(pageState)\nClearance: \(clearanceState)\nLocal frames: \(localFrames) · Cloudflare frames: \(cloudflareFrames)\nBlocked navigations: \(blockedNavigations)\(blocked)")
     }
 
     private func fail(_ message: String) {

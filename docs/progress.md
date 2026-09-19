@@ -1,3 +1,11 @@
+# Cloudflare revision 5 / LiveContainer follow-up — 2026-09-19
+
+- Device feedback confirms revision 4 receives new clearance and permits all observed frames, but the website's verification/loading document repeats. The user confirmed Aidoku also works inside LiveContainer.
+- [Exact-feed diagnosis 35458917301](https://github.com/Mohammad-Rahat/Midoku/actions/runs/35458917301), commit `0b4da5e028fde63c53f62709cfdd2d2455b5b189`, compared original headers, default browser headers and an ephemeral browser. All returned 403 with no active challenge DOM on the Mac runner. Native retry included clearance and still returned 403. This did not reproduce the device loop or prove live access.
+- Added per-connection memory profiles when running in LiveContainer, avoiding persistent cookie-file dependencies while preserving connection isolation. Normally installed builds retain persistent profiles. Existing saved profiles remain intact; temporary sessions may need verification again after app termination. The UI identifies the session lifetime and diagnostics identify the selected mode.
+- Added explicit Try request after fresh clearance, including while the page keeps loading. It uses the existing bounded native retry. Automatic completion retains its finished-page checks. Timeout/error replaces the browser with recovery UI so its spinner does not remain visible after the attempt ends.
+- Added real presentation/retry regression cases and memory-profile checks in the native WebKit probe. Build and live outcomes are pending; the LiveContainer profile change is a compatibility hypothesis requiring device confirmation. See [verification details](cloudflare-verification.md).
+
 # Cloudflare revision 4 / actual WebKit regression — 2026-09-19
 
 - The user's revision-3 screenshot still showed HTTP 403, absent clearance, zero local frames and six blocked navigations. The earlier 83 passing Swift tests and archive did not establish live clearance.
