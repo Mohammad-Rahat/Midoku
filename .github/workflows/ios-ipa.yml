@@ -94,7 +94,7 @@ jobs:
           bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
           xcrun simctl install "$device_id" "$app"
           mkdir -p build/screenshots
-          for screen in home library entry settings layout; do
+          for screen in home library browse history entry settings layout rename; do
             xcrun simctl terminate "$device_id" "$bundle_id" || true
             xcrun simctl launch "$device_id" "$bundle_id" --library-preview "--$screen-preview"
             sleep 4

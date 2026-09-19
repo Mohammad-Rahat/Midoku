@@ -13,7 +13,6 @@ struct ContentView: View {
     @State private var browsePath = NavigationPath()
     @State private var historyPath = NavigationPath()
     @State private var settingsPath = NavigationPath()
-    @State private var visitedTabs: Set<MidokuTab> = [.home]
     @State private var hiddenBars: [MidokuTab: Bool] = [:]
     @State private var initialized = false
     @State private var loadAttempt = 0
@@ -61,7 +60,6 @@ struct ContentView: View {
             await extensions.load()
             if !initialized {
                 selectedTab = MidokuTab(rawValue: settings.snapshot.preferences.launchTab.rawValue) ?? .home
-                visitedTabs.insert(selectedTab)
                 lock.configure(enabled: settings.snapshot.preferences.appLock)
                 initialized = true
             }
@@ -69,9 +67,12 @@ struct ContentView: View {
             if CommandLine.arguments.contains("--library-preview") {
                 do {
                     let id = try await LibraryPreviewData.prepare(settings)
-                    selectedTab = CommandLine.arguments.contains("--home-preview") ? .home : (CommandLine.arguments.contains("--settings-preview") || CommandLine.arguments.contains("--layout-preview") ? .settings : .library)
-                    visitedTabs.insert(selectedTab)
-                    if CommandLine.arguments.contains("--entry-preview"), libraryPath.isEmpty { libraryPath.append(id) }
+                    if CommandLine.arguments.contains("--home-preview") { selectedTab = .home }
+                    else if CommandLine.arguments.contains("--browse-preview") { selectedTab = .browse }
+                    else if CommandLine.arguments.contains("--history-preview") { selectedTab = .history }
+                    else if CommandLine.arguments.contains("--settings-preview") || CommandLine.arguments.contains("--layout-preview") { selectedTab = .settings }
+                    else { selectedTab = .library }
+                        if CommandLine.arguments.contains("--entry-preview") || CommandLine.arguments.contains("--rename-preview"), libraryPath.isEmpty { libraryPath.append(id) }
                 } catch { settings.update { _ in throw error } }
             }
             #endif
@@ -99,20 +100,18 @@ struct ContentView: View {
     }
 
     private var tabs: some View {
-        ZStack {
-            ForEach(MidokuTab.allCases.filter { visitedTabs.contains($0) }) { tab in
+        TabView(selection: $selectedTab) {
+            ForEach(MidokuTab.allCases) { tab in
                 tabContent(tab)
+                    .tag(tab)
+                    .toolbar(.hidden, for: .tabBar)
                     .onPreferenceChange(AppTabBarHiddenPreference.self) { hiddenBars[tab] = $0 }
-                    .opacity(selectedTab == tab ? 1 : 0)
-                    .allowsHitTesting(selectedTab == tab)
-                    .accessibilityHidden(selectedTab != tab)
-                    .zIndex(selectedTab == tab ? 1 : 0)
             }
         }
+        .toolbar(.hidden, for: .tabBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if hiddenBars[selectedTab] != true { TraditionalTabBar(selection: $selectedTab) }
         }
-        .onChange(of: selectedTab) { visitedTabs.insert(selectedTab) }
         .sheet(item: Binding(get: { extensions.challenges.current }, set: { value in
             if value == nil, let challenge = extensions.challenges.current { extensions.challenges.cancel(id: challenge.id) }
         }), onDismiss: { extensions.challenges.presentationDidDismiss() }) { challenge in

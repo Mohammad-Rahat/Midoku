@@ -41,16 +41,17 @@ extension AppSettingsStore {
 }
 
 struct SettingsListStyle: ViewModifier {
+    var largeTitle = false
     func body(content: Content) -> some View {
         content.listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(MidokuTheme.background)
             .foregroundStyle(MidokuTheme.primaryText)
             .environment(\.defaultMinListRowHeight, 52)
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(largeTitle ? .large : .inline)
     }
 }
-extension View { func settingsStyle() -> some View { modifier(SettingsListStyle()) } }
+extension View { func settingsStyle(largeTitle: Bool = false) -> some View { modifier(SettingsListStyle(largeTitle: largeTitle)) } }
 
 struct SettingLabel: View {
     let title: String
@@ -124,7 +125,7 @@ struct SettingsView: View {
             }.listRowBackground(MidokuTheme.surface)
             #endif
         }
-        .settingsStyle().navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
+        .settingsStyle(largeTitle: true).navigationTitle("Settings")
     }
 }
 

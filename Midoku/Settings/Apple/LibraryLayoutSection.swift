@@ -56,8 +56,12 @@ struct LibraryLayoutSection: View {
             if style == .custom { Image(systemName: "slider.horizontal.3").font(.title2) }
             else {
                 let count = style == .standard ? 2 : 3
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: count), spacing: 2) {
-                    ForEach(0..<(count * 3), id: \.self) { _ in RoundedRectangle(cornerRadius: 2).fill().frame(height: 22) }
+                HStack(spacing: 2) {
+                    ForEach(0..<count, id: \.self) { _ in
+                        VStack(spacing: 2) {
+                            ForEach(0..<3, id: \.self) { _ in RoundedRectangle(cornerRadius: 2).fill().frame(height: 22) }
+                        }
+                    }
                 }.padding(6)
             }
         }.accessibilityHidden(true)

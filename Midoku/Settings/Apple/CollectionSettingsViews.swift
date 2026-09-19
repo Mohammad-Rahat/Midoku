@@ -310,9 +310,9 @@ struct ReadingHistoryView: View {
                             }
                         }.listRowBackground(MidokuTheme.surface)
                     }
-                }.settingsStyle()
+                }.settingsStyle(largeTitle: true)
             }
-        }.navigationTitle("History").navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle("History").navigationBarTitleDisplayMode(.large)
     }
     private var days: [Date] { Array(Set(settings.snapshot.history.map { Calendar.current.startOfDay(for: $0.openedAt) })).sorted(by: >) }
 }

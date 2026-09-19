@@ -77,6 +77,11 @@ struct LibraryEntryView: View {
                 } label: { Image(systemName: "ellipsis.circle").accessibilityLabel("Entry actions") }.disabled(entry == nil)
             }
         }
+        #if DEBUG
+        .onAppear {
+            if CommandLine.arguments.contains("--rename-preview"), renamedSlot == nil { renamedSlot = entry?.slots.first }
+        }
+        #endif
         .safeAreaInset(edge: .bottom) { if selecting { selectionBar } }
         .sheet(isPresented: $editing) { if let entry { EntryEditor(entry: entry, extensions: extensions) } }
         .sheet(isPresented: $sources) { EntrySourcesView(entryID: entryID, extensions: extensions) }

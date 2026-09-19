@@ -72,7 +72,7 @@ struct LibraryView: View {
             } else {
                 TabView(selection: $category) {
                     ForEach(categoryIDs, id: \.self) { id in
-                        categoryPage(id, landscape: geometry.size.width > geometry.size.height).tag(id)
+                        categoryPage(id, width: geometry.size.width, landscape: geometry.size.width > geometry.size.height).tag(id)
                     }
                 }.tabViewStyle(.page(indexDisplayMode: .never))
             }
@@ -80,7 +80,7 @@ struct LibraryView: View {
             if let message = message ?? library.refreshMessage { Text(message).font(.caption).foregroundStyle(MidokuTheme.secondaryText).padding(.horizontal, 16) }
         }
         }
-        .background(MidokuTheme.background).navigationTitle(selecting ? "\(selected.count) selected" : "Library").navigationBarTitleDisplayMode(.inline)
+        .background(MidokuTheme.background).navigationTitle(selecting ? "\(selected.count) selected" : "Library").navigationBarTitleDisplayMode(selecting ? .inline : .large)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button(selecting ? "Done" : "Select") { selecting.toggle(); selected.removeAll() }.disabled(state.entries.isEmpty)
@@ -143,9 +143,10 @@ struct LibraryView: View {
         if id == "uncategorized" { return "Uncategorized" }
         return settings.snapshot.categories.first { $0.id.uuidString == id }?.name ?? "Category"
     }
-    private func categoryPage(_ id: String, landscape: Bool) -> some View {
+    private func categoryPage(_ id: String, width: CGFloat, landscape: Bool) -> some View {
         let entries = visible(in: id)
         let count = settings.snapshot.preferences.resolvedLibraryLayout.columns(landscape: landscape)
+        let cellWidth = max(1, (width - 32 - CGFloat(count - 1) * 12) / CGFloat(count))
         return ScrollView {
             if entries.isEmpty {
                 VStack(spacing: 12) {
@@ -156,8 +157,8 @@ struct LibraryView: View {
             } else if listLayout || textSize.isAccessibilitySize {
                 LazyVStack(spacing: 12) { ForEach(entries) { entry in entryLink(entry, compact: true) } }.padding(16)
             } else {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: count), alignment: .leading, spacing: 20) {
-                    ForEach(entries) { entry in entryLink(entry, compact: false) }
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(cellWidth), spacing: 12, alignment: .top), count: count), alignment: .leading, spacing: 20) {
+                    ForEach(entries) { entry in entryLink(entry, compact: false, width: cellWidth) }
                 }.padding(16)
             }
         }.refreshable { await library.refresh() }
@@ -172,20 +173,19 @@ struct LibraryView: View {
             Picker("Publication", selection: $publication) { Text("Any publication").tag("all"); ForEach(["ongoing", "completed", "hiatus", "cancelled"], id: \.self) { Text($0.capitalized).tag($0) } }
         } label: { Image(systemName: "line.3.horizontal.decrease").frame(minWidth: 36, minHeight: 32) }.accessibilityLabel("Filter library")
     }
-    @ViewBuilder private func entryLink(_ entry: PersonalEntry, compact: Bool) -> some View {
+    @ViewBuilder private func entryLink(_ entry: PersonalEntry, compact: Bool, width: CGFloat? = nil) -> some View {
         if selecting {
-            Button { if !selected.insert(entry.id).inserted { selected.remove(entry.id) } } label: { card(entry, compact: compact) }.buttonStyle(.plain)
+            Button { if !selected.insert(entry.id).inserted { selected.remove(entry.id) } } label: { card(entry, compact: compact, width: width) }.buttonStyle(.plain)
         } else {
-            NavigationLink { LibraryEntryView(entryID: entry.id, extensions: extensions) } label: { card(entry, compact: compact) }.buttonStyle(.plain)
+            NavigationLink { LibraryEntryView(entryID: entry.id, extensions: extensions) } label: { card(entry, compact: compact, width: width) }.buttonStyle(.plain)
                 .contextMenu { Button("Select entry", systemImage: "checkmark.circle") { selecting = true; selected = [entry.id] } }
         }
     }
-    private func card(_ entry: PersonalEntry, compact: Bool) -> some View {
+    private func card(_ entry: PersonalEntry, compact: Bool, width: CGFloat?) -> some View {
         let layout = compact ? AnyLayout(HStackLayout(alignment: .center, spacing: 14)) : AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
         return layout {
             LibraryCoverView(entry: entry, extensions: extensions)
-                .aspectRatio(2.0 / 3.0, contentMode: .fit)
-                .frame(width: compact ? 64 : nil).frame(maxWidth: compact ? nil : .infinity)
+                .frame(width: compact ? 64 : width, height: compact ? 96 : (width ?? 140) * 1.5)
                 .clipped().clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(alignment: .topTrailing) {
                     if selecting { Image(systemName: selected.contains(entry.id) ? "checkmark.circle.fill" : "circle").font(.title2).foregroundStyle(.white, .green).padding(6) }
@@ -195,7 +195,7 @@ struct LibraryView: View {
                 Text("\(entry.slots.filter { !state.isRead($0) }.count) unread · \(entry.status.title)").font(.caption).foregroundStyle(MidokuTheme.secondaryText)
             }
             if compact { Spacer(minLength: 0) }
-        }.frame(maxWidth: .infinity, alignment: .leading).accessibilityElement(children: .combine)
+        }.frame(width: compact ? nil : width, alignment: .leading).frame(maxWidth: compact ? .infinity : nil, alignment: .leading).accessibilityElement(children: .combine)
     }
     private func bulk(_ action: @escaping (inout AppSnapshot) throws -> Void) { Task { do { try await settings.commit(action) } catch { message = error.localizedDescription } } }
     private func mark(read: Bool) { let ids = selected; bulk { state in for id in ids { if let entry = state.library.entry(id) { try state.markSlots(entryID: id, slots: Set(entry.slots.map(\.id)), read: read) } } } }
@@ -212,12 +212,14 @@ struct LibraryCoverView: View {
     @State private var adapter: (any SourceAdapter)?
     private var listing: LibraryListing? { settings.snapshot.library.listing(entry.primaryListingID) }
     var body: some View {
-        Group {
-            if let id = entry.coverID, let data = settings.snapshot.library.covers.first(where: { $0.id == id })?.data, let image = UIImage(data: data) {
-                Image(uiImage: image).resizable().scaledToFill()
-            } else if !entry.hidesCover, let adapter {
-                SourceCoverView(url: listing?.details.coverURL, adapter: adapter, extensions: extensions)
-            } else { Image("MidokuCoverPlaceholder").resizable().scaledToFit().background(MidokuTheme.elevated) }
+        GeometryReader { geometry in
+            Group {
+                if let id = entry.coverID, let data = settings.snapshot.library.covers.first(where: { $0.id == id })?.data, let image = UIImage(data: data) {
+                    Image(uiImage: image).resizable().scaledToFill()
+                } else if !entry.hidesCover, let adapter {
+                    SourceCoverView(url: listing?.details.coverURL, adapter: adapter, extensions: extensions)
+                } else { Image("MidokuCoverPlaceholder").resizable().scaledToFit().background(MidokuTheme.elevated) }
+            }.frame(width: geometry.size.width, height: geometry.size.height).clipped()
         }.accessibilityHidden(true).task(id: "\(listing?.id.uuidString ?? "none")-\(extensions.isReady)") {
             guard let listing, let connection = extensions.connections.first(where: { $0.id == listing.identity.connectionID }) else { adapter = nil; return }
             adapter = try? await extensions.adapter(for: connection)
