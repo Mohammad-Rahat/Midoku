@@ -14,6 +14,7 @@ struct LibraryEntryView: View {
     @State private var resetting = false
     @State private var selecting = false
     @State private var originalListing: LibraryListing?
+    @State private var readingSlot: UUID?
     @Environment(\.gridLandscape) private var landscape
     @Environment(\.dynamicTypeSize) private var textSize
     @State private var selected: Set<UUID> = []
@@ -107,6 +108,9 @@ struct LibraryEntryView: View {
         }
         #endif
         .modifier(OriginalListingNavigation(listing: $originalListing, extensions: extensions))
+        .navigationDestination(isPresented: Binding(get: { readingSlot != nil }, set: { if !$0 { readingSlot = nil } })) {
+            if let readingSlot { LibraryReaderView(entryID: entryID, initialSlotID: readingSlot, extensions: extensions) }
+        }
         .safeAreaInset(edge: .bottom) { if selecting { selectionBar } }
         .sheet(isPresented: $editing) { if let entry { EntryEditor(entry: entry, extensions: extensions) } }
         .sheet(isPresented: $sources) { EntrySourcesView(entryID: entryID, extensions: extensions) }
@@ -205,9 +209,9 @@ struct LibraryEntryView: View {
                 if selecting {
                     Button { toggle(slot.id) } label: { chapterCardLabel(slot, variant: variant, chapter: chapter) }.buttonStyle(.plain)
                 } else {
-                    NavigationLink { LibraryReaderView(entryID: entryID, initialSlotID: slot.id, extensions: extensions) } label: {
+                    Button { readingSlot = slot.id } label: {
                         chapterCardLabel(slot, variant: variant, chapter: chapter)
-                    }.buttonStyle(.plain)
+                    }.buttonStyle(.plain).accessibilityHint("Opens chapter")
                 }
                 HStack(spacing: 0) {
                     if state.isRead(slot) { Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint).accessibilityLabel("Read") }

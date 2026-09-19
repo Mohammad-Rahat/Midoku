@@ -12,6 +12,7 @@ struct SourceEntryView: View {
     @State private var adding = false
     @State private var selecting = false
     @State private var showingClipboard = false
+    @State private var readingChapter: ChapterRecord?
     @State private var selected: Set<String> = []
     @State private var actionMessage: String?
     @State private var details: MangaDetails?
@@ -160,6 +161,9 @@ struct SourceEntryView: View {
             }
         }
         .navigationDestination(isPresented: $showingClipboard) { ClipboardView() }
+        .navigationDestination(isPresented: Binding(get: { readingChapter != nil }, set: { if !$0 { readingChapter = nil } })) {
+            if let readingChapter { reader(readingChapter) }
+        }
         .safeAreaInset(edge: .bottom) {
             if selecting {
                 HStack {
@@ -250,8 +254,8 @@ struct SourceEntryView: View {
             if selecting {
                 Button { toggle(chapter) } label: { chapterCardLabel(chapter) }.buttonStyle(.plain)
             } else {
-                NavigationLink { reader(chapter) } label: { chapterCardLabel(chapter) }
-                    .buttonStyle(.plain).disabled(!adapter.manifest.capabilities.contains(.pages))
+                Button { readingChapter = chapter } label: { chapterCardLabel(chapter) }
+                    .buttonStyle(.plain).disabled(!adapter.manifest.capabilities.contains(.pages)).accessibilityHint("Opens chapter")
             }
             HStack(spacing: 0) {
                 if settings.snapshot.library.completed.contains(chapterIdentity(chapter)) {

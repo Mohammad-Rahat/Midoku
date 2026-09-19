@@ -79,13 +79,13 @@ struct ContentView: View {
                 do {
                     let id = try await LibraryPreviewData.prepare(settings)
                     try await settings.commit { snapshot in
-                        snapshot.preferences.chapterLayout = ChapterLayoutPreferences(style: CommandLine.arguments.contains("--chapter-grid-preview") || CommandLine.arguments.contains("--layout-preview") ? .grid : .list)
+                        snapshot.preferences.chapterLayout = ChapterLayoutPreferences(style: CommandLine.arguments.contains("--chapter-grid-preview") || (CommandLine.arguments.contains("--layout-preview") || CommandLine.arguments.contains("--chapter-settings-preview")) ? .grid : .list)
                         if CommandLine.arguments.contains("--empty-clipboard-preview") { snapshot.library.clipboard = [] }
                     }
                     if CommandLine.arguments.contains("--home-preview") { selectedTab = .home }
                     else if CommandLine.arguments.contains("--browse-preview") || CommandLine.arguments.contains("--search-preview") || CommandLine.arguments.contains("--source-grid-preview") { selectedTab = .browse }
                     else if CommandLine.arguments.contains("--history-preview") { selectedTab = .history }
-                    else if CommandLine.arguments.contains("--settings-preview") || CommandLine.arguments.contains("--settings-bottom-preview") || CommandLine.arguments.contains("--layout-preview") { selectedTab = .settings }
+                    else if CommandLine.arguments.contains("--settings-preview") || CommandLine.arguments.contains("--settings-bottom-preview") || (CommandLine.arguments.contains("--layout-preview") || CommandLine.arguments.contains("--chapter-settings-preview")) { selectedTab = .settings }
                     else { selectedTab = .library }
                         if CommandLine.arguments.contains("--entry-preview") || CommandLine.arguments.contains("--rename-preview") || CommandLine.arguments.contains("--chapters-preview") || CommandLine.arguments.contains("--chapter-grid-preview") || CommandLine.arguments.contains("--empty-clipboard-preview"), libraryPath.isEmpty { libraryPath.append(id) }
                 } catch { settings.update { _ in throw error } }
@@ -161,7 +161,7 @@ struct ContentView: View {
         case .settings:
             NavigationStack(path: $settingsPath) {
                 #if DEBUG
-                if CommandLine.arguments.contains("--layout-preview") { LibrarySettingsView() }
+                if (CommandLine.arguments.contains("--layout-preview") || CommandLine.arguments.contains("--chapter-settings-preview")) { LibrarySettingsView() }
                 else { SettingsView(extensions: extensions) }
                 #else
                 SettingsView(extensions: extensions)

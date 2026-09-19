@@ -191,6 +191,7 @@ struct AppearanceSettingsView: View {
 struct LibrarySettingsView: View {
     @Environment(AppSettingsStore.self) private var settings
     var body: some View {
+        ScrollViewReader { proxy in
         Form {
             LibraryLayoutSection()
             Section {
@@ -202,8 +203,17 @@ struct LibrarySettingsView: View {
                 SettingPicker(title: "Default sort", selection: settings.binding(\.librarySort))
                 Toggle("Refresh when opening the app", isOn: settings.binding(\.refreshOnLaunch))
             } header: { Text("Library defaults") }.listRowBackground(MidokuTheme.surface)
-            ChapterLayoutSection()
+            ChapterLayoutSection().id("chapter-layout")
         }.settingsStyle().navigationTitle("Library")
+        #if DEBUG
+        .task {
+            if CommandLine.arguments.contains("--chapter-settings-preview") {
+                try? await Task.sleep(for: .milliseconds(300))
+                proxy.scrollTo("chapter-layout", anchor: .bottom)
+            }
+        }
+        #endif
+        }
     }
 }
 
