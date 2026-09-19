@@ -4,8 +4,44 @@ import Testing
 @testable import Midoku
 
 @MainActor
-@Suite("Collection persistence and physical reader routing")
+@Suite("Collection persistence and physical reader routing", .serialized)
 struct CollectionIntegrationTests {
+    @Test func pageLoadingAndPreloadingUsePhysicalChapterIdentity() async throws {
+        await SourceManager.shared.waitForSourcesLoad()
+        let sources = SourceStore.shared.sourcesByKey
+        let disabled = SourceStore.shared.disabledSourceKeys
+        defer { SourceStore.shared.update(sourcesByKey: sources, disabledSourceKeys: disabled) }
+        var testSources = sources
+        for key in ["mc.routing.a", "mc.routing.b"] {
+            testSources[key] = AidokuRunner.Source(url: nil, key: key, name: key, version: 1,
+                languages: ["en"], contentRating: .safe, runner: MCPageRoutingRunner())
+        }
+        SourceStore.shared.update(sourcesByKey: testSources, disabledSourceKeys: disabled)
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = MCCollectionStore(fileURL: root.appendingPathComponent("collection.json"))
+        let a = AidokuRunner.Manga(sourceKey: "mc.routing.a", key: "book", title: "A")
+        let b = AidokuRunner.Manga(sourceKey: "mc.routing.b", key: "book", title: "B")
+        let entry = try store.add(a, chapters: [.init(key: "same", chapterNumber: 20), .init(key: "last", chapterNumber: 22)])
+        store.copy(manga: b, chapters: [.init(key: "same", chapterNumber: 21)])
+        try store.change { state in try state.library.paste(entryID: entry, revision: 0, choices: state.library.pastePreview(entryID: entry)) }
+        let sequence = try MCReaderSequence(entryID: entry, slotID: try #require(store.library.entry(entry)?.slots.first).id, store: store)
+        let model = ReaderPagedViewModel(source: testSources[a.sourceKey], manga: a)
+        model.collectionSequence = sequence
+        await model.loadPages(chapter: sequence.chapters[0])
+        #expect(model.pages.first?.text == "mc.routing.a/book/same")
+        await model.preload(chapter: sequence.chapters[1])
+        #expect(model.preloadedPages.first?.sourceId == "mc.routing.b")
+        await model.loadPages(chapter: sequence.chapters[1])
+        #expect(model.pages.first?.text == "mc.routing.b/book/same")
+        #expect(model.source?.key == "mc.routing.b")
+        await model.loadPages(chapter: sequence.chapters[2])
+        #expect(model.pages.first?.text == "mc.routing.a/book/last")
+        await model.loadPages(chapter: sequence.chapters[1])
+        #expect(model.pages.first?.text == "mc.routing.b/book/same")
+        #expect(model.pages.first?.chapterId == sequence.chapters[1].key)
+    }
+
     @Test func readerRoutesIdenticalChapterKeysToTheirOwnSource() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -52,5 +88,16 @@ struct CollectionIntegrationTests {
         #expect(store.library.entries.count == 1)
         try store.restore(before)
         #expect(store.library.title(try #require(store.library.entries.first)) == "Keep me")
+    }
+}
+
+private struct MCPageRoutingRunner: AidokuRunner.Runner {
+    let features = AidokuRunner.SourceFeatures()
+    func getSearchMangaList(query: String?, page: Int, filters: [AidokuRunner.FilterValue]) async throws -> AidokuRunner.MangaPageResult {
+        .init(entries: [], hasNextPage: false)
+    }
+    func getMangaUpdate(manga: AidokuRunner.Manga, needsDetails: Bool, needsChapters: Bool) async throws -> AidokuRunner.Manga { manga }
+    func getPageList(manga: AidokuRunner.Manga, chapter: AidokuRunner.Chapter) async throws -> [AidokuRunner.Page] {
+        [.init(content: .text("\(manga.sourceKey)/\(manga.key)/\(chapter.key)"))]
     }
 }

@@ -67,7 +67,7 @@ struct MCCollectionRootView: View {
                                         }
                                     }.buttonStyle(.plain)
                                 } else {
-                                    NavigationLink(value: entry.id) label: { entryLabel(entry) }.buttonStyle(.plain)
+                                    NavigationLink(value: entry.id) { entryLabel(entry) }.buttonStyle(.plain)
                                 }
                             }
                         }.padding()
