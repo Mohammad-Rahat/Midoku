@@ -39,6 +39,14 @@ and clearing one connection without clearing another. The next live probe compar
 the production memory-store configuration with the persistent configuration. These
 checks do not establish successful iPhone/LiveContainer clearance.
 
+[Native probe 35459724067](https://github.com/Mohammad-Rahat/Midoku/actions/runs/35459724067)
+passed the real memory-session isolation/reset/header checks and required-frame
+execution. Both production memory and persistent configurations still received
+HTTP 403 from the live site, including the native retry with clearance and the
+bundled extension search. Neither result establishes live success. The new build
+requires the user's LiveContainer check; no exact persistent-store failure has
+been reproduced on that device.
+
 ## Reference and confirmed differences
 
 Read Aidoku's [CloudflareHandler.swift](https://github.com/Aidoku/Aidoku/blob/8ae2da15d9edef05d0e6f27e0799c629883d0890/Aidoku/Core/Sources/Cloudflare/CloudflareHandler.swift),
@@ -87,7 +95,8 @@ The earlier default-store experiment did not resolve the user's device issue.
 
 ## Current behavior
 
-- Create an ordinary WKWebView with the connection's persistent profile, without
+- Create an ordinary WKWebView with the connection's profile (temporary in
+  LiveContainer, persistent in a normal installation), without
   extraction scripts or content blockers. Match native UA and rendering mode.
 - Attach it to a native view controller before loading. Initially keep it small,
   then expand the same view three seconds after navigation, or after twelve
