@@ -43,7 +43,7 @@ guard let sourceURL = URL(string: "https://comix.to/browse") else { exit(1) }
 Task { @MainActor in
     do {
         let (data, _) = try await URLSession.shared.data(from: sourceURL)
-        let rules = #"[{"trigger":{"url-filter":".*"},"action":{"type":"block"}},{"trigger":{"url-filter":"^https://(comix\\.to|comix\\.ws|static\\.comix\\.to|([a-z0-9-]+\\.)+wowpic2\\.store|challenges\\.cloudflare\\.com)(:443)?/"},"action":{"type":"ignore-previous-rules"}},{"trigger":{"url-filter":".*","resource-type":["image","media","font"]},"action":{"type":"block"}}]"#
+        let rules = try SourceBrowserRules.encoded(domains: ["comix.to", "comix.ws", "static.comix.to", "*.wowpic2.store"])
         if let blocker = try await WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "midoku-comix-smoke", encodedContentRuleList: rules) { web.configuration.userContentController.add(blocker) }
         let html = String(decoding: data, as: UTF8.self).replacingOccurrences(of: "type=\"module\"", with: "type=\"application/x-midoku-module\"")
         web.loadHTMLString(html, baseURL: sourceURL)

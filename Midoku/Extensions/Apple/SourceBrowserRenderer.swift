@@ -13,17 +13,9 @@ final class SourceBrowserRenderer: SourceBrowserRendering {
         view.frame = CGRect(x: 0, y: 0, width: 1024, height: 768)
         let navigation = BrowserNavigation(policy: policy)
         view.navigationDelegate = navigation
-        // No third-party browsing or trackers are required for adapter extraction.
-        let allowedHosts = (policy.domains + ["challenges.cloudflare.com"]).map { domain in
-            domain.hasPrefix("*.") ? "([a-z0-9-]+\\.)+" + NSRegularExpression.escapedPattern(for: String(domain.dropFirst(2))) : NSRegularExpression.escapedPattern(for: domain)
-        }.joined(separator: "|")
-        let rules: [[String: Any]] = [
-            ["trigger": ["url-filter": ".*"], "action": ["type": "block"]],
-            ["trigger": ["url-filter": "^https://(" + allowedHosts + ")(:443)?/"], "action": ["type": "ignore-previous-rules"]],
-            ["trigger": ["url-filter": ".*", "resource-type": ["image", "media", "font"]], "action": ["type": "block"]]
-        ]
-        let encoded = try JSONSerialization.data(withJSONObject: rules)
-        let blocker = try await WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "midoku-extract-" + connection.id.uuidString, encodedContentRuleList: String(decoding: encoded, as: UTF8.self))
+        let blocker = try await WKContentRuleListStore.default().compileContentRuleList(
+            forIdentifier: "midoku-extract-" + connection.id.uuidString,
+            encodedContentRuleList: SourceBrowserRules.encoded(domains: policy.domains))
         if let blocker { view.configuration.userContentController.add(blocker) }
         view.configuration.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         defer {
