@@ -112,7 +112,7 @@ struct DownloadsListView: View {
                     Text((item.record.chapter.number.map { "Chapter \($0) · " } ?? "") + item.record.sourceName)
                         .font(.caption).foregroundStyle(MidokuTheme.secondaryText)
                     if item.status == .completed {
-                        NavigationLink("Read offline") { OfflineChapterReader(download: item) }
+                        NavigationLink("Read offline") { SavedChapterReaderDestination(download: item) }
                     } else {
                         Text(item.message ?? item.status.title).font(.subheadline).foregroundStyle(MidokuTheme.secondaryText)
                         if item.expectedPages > 0 {
@@ -284,11 +284,25 @@ struct ChapterReaderDestination: View {
     }
     var body: some View {
         Group {
-        if let download = downloads.items.first(where: { $0.record.id == identity && $0.status == .completed }) {
+        if let context = settings.snapshot.library.readerContext(identity: identity) {
+            LibraryReaderView(entryID: context.entryID, initialSlotID: context.slotID, extensions: extensions)
+        } else if let download = downloads.items.first(where: { $0.record.id == identity && $0.status == .completed }) {
             OfflineChapterReader(download: download)
         } else {
             SourceChapterReader(mangaID: mangaID, mangaTitle: mangaTitle, chapter: active, adapter: adapter, extensions: extensions)
         }
         }.id(active.id).environment(\.readerChapterNavigation, navigation)
+    }
+}
+
+/// Downloads opened outside Library recover their canonical entry context when it still exists.
+struct SavedChapterReaderDestination: View {
+    let download: SavedDownload
+    @Environment(LibraryCoordinator.self) private var library
+    var body: some View {
+        let state = library.settings.snapshot.library
+        if let context = state.readerContext(identity: download.record.identity, preferredEntryID: download.record.entryID) {
+            LibraryReaderView(entryID: context.entryID, initialSlotID: context.slotID, extensions: library.extensions)
+        } else { OfflineChapterReader(download: download) }
     }
 }

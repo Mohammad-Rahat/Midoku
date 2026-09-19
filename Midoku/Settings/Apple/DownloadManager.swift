@@ -114,7 +114,8 @@ final class DownloadManager {
                 let response = try await extensions.requests.request(SourceHTTPRequest(url: page.url, headers: page.headers),
                     connection: current.connection, manifest: current.manifest, interaction: .background, kind: .download)
                 try Task.checkCancellation()
-                let body = try await Task.detached { try ComixImageDecoder.decode(response, processor: current.manifest.imageProcessing) }.value
+                let processor = current.manifest.imageProcessing
+                let body = try await Task.detached { try ComixImageDecoder.decode(response, processor: processor) }.value
                 let valid = await Task.detached {
                     guard let source = CGImageSourceCreateWithData(body as CFData, nil), CGImageSourceGetCount(source) > 0,
                           let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true,

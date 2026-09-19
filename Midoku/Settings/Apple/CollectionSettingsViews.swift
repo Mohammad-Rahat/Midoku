@@ -324,7 +324,7 @@ private struct HistoryReaderDestination: View {
                settings.snapshot.library.entry(entryID)?.slots.contains(where: { $0.id == slotID }) == true {
                 LibraryReaderView(entryID: entryID, initialSlotID: slotID, extensions: extensions)
             } else if let saved = downloads.items.first(where: { $0.record.id == record.id && $0.status == .completed }) {
-                OfflineChapterReader(download: saved)
+                SavedChapterReaderDestination(download: saved)
             } else if let adapter {
                 SourceChapterReader(mangaID: record.identity.listing.externalID, mangaTitle: record.mangaTitle,
                                     chapter: record.chapter, adapter: adapter, extensions: extensions)

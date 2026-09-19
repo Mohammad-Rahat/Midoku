@@ -141,6 +141,15 @@ nonisolated struct LibraryState: Codable, Sendable {
         guard let variant = slot.preferred, let source = chapter(variant.chapterID) else { return false }
         return completed.contains(source.identity)
     }
+    func readerContext(identity: SourceChapterIdentity, preferredEntryID: UUID? = nil) -> (entryID: UUID, slotID: UUID)? {
+        let ordered = entries.sorted { ($0.id == preferredEntryID ? 0 : 1) < ($1.id == preferredEntryID ? 0 : 1) }
+        for entry in ordered {
+            if let slot = entry.slots.first(where: { $0.preferred.flatMap { chapter($0.chapterID) }?.identity == identity }) {
+                return (entry.id, slot.id)
+            }
+        }
+        return nil
+    }
     func resumeSlot(_ entry: PersonalEntry, positions: [ReadingPosition]) -> UUID? {
         if let recent = positions.sorted(by: { $0.updatedAt > $1.updatedAt }).first(where: { position in
             entry.slots.contains { slot in slot.preferred.flatMap { chapter($0.chapterID) }?.identity == position.id && !isRead(slot) }
