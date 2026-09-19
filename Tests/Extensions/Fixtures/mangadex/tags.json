@@ -1,8 +1,0 @@
-{
-  "result": "ok",
-  "response": "collection",
-  "data": [
-    { "id": "00000080-1111-4111-8111-000000000080", "type": "tag", "attributes": { "name": { "en": "Adventure" }, "group": "genre" }, "relationships": [] },
-    { "id": "00000081-1111-4111-8111-000000000081", "type": "tag", "attributes": { "name": { "en": "Comedy" }, "group": "genre" }, "relationships": [] }
-  ]
-}

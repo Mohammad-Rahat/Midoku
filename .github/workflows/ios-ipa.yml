@@ -1,132 +1,89 @@
-name: iOS IPA
+name: Midoku merged IPA
 
 on:
-  workflow_dispatch:
   push:
-    branches: [main]
-    paths:
-      - 'Midoku/**'
-      - 'Midoku.xcodeproj/**'
-      - 'Tests/**'
-      - 'Package.swift'
-      - '.github/workflows/ios-ipa.yml'
+    branches: [midoku-aidoku-merge]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ios-ipa-${{ github.ref }}
+  group: midoku-merged-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Test and package unsigned IPA
     runs-on: xcode-27
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
     defaults:
       run:
         shell: bash
     steps:
-      - name: Check out source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-
-      - name: Check Xcode and SDK
+      - name: Verify collection domain
         run: |
+          mkdir -p build/artifacts
+          set -o pipefail
           xcodebuild -version
-          xcrun --sdk iphoneos --show-sdk-version
-          xcodebuild -list -project Midoku.xcodeproj
-
-      - name: Verify extension tooling
-        working-directory: Extensions
-        run: npm ci && npm test
-
-      - name: Run Swift tests
-        run: swift test
-
-      - name: Archive for iOS
-        run: |
-          mkdir -p build
-          set -o pipefail
-          xcodebuild archive \
-            -project Midoku.xcodeproj \
-            -scheme Midoku \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath "$PWD/build/Midoku.xcarchive" \
-            -resultBundlePath "$PWD/build/Archive.xcresult" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            | tee build/archive.log
-
-      - name: Package unsigned IPA
-        run: |
-          app="$PWD/build/Midoku.xcarchive/Products/Applications/Midoku.app"
-          test -d "$app"
-          test -s "$app/Midoku"
-          file "$app/Midoku"
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$app/Info.plist"
-          mkdir -p build/package/Payload build/artifacts
-          ditto "$app" build/package/Payload/Midoku.app
-          (cd build/package && /usr/bin/zip -qry ../artifacts/Midoku-unsigned.ipa Payload)
-          unzip -t build/artifacts/Midoku-unsigned.ipa
-          (cd build/artifacts && shasum -a 256 Midoku-unsigned.ipa > SHA256SUMS.txt)
-          {
-            printf 'Source commit: %s\n' "$GITHUB_SHA"
-            xcodebuild -version
-            printf '\nUnsigned iOS device build. Sign with a valid Apple identity and provisioning profile before installation.\n'
-          } > build/artifacts/BUILD.txt
-
-      - name: Build and capture simulator screens
+          swift test 2>&1 | tee build/domain-tests.log
+      - name: Archive unsigned device app
         run: |
           set -o pipefail
-          xcodebuild build -project Midoku.xcodeproj -scheme Midoku -configuration Debug \
-            -destination 'generic/platform=iOS Simulator' -derivedDataPath "$PWD/build/Simulator" \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO > build/simulator.log 2>&1
-          device_id=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; data=json.load(sys.stdin); print(next(d["udid"] for runtime,devices in data["devices"].items() if "iOS" in runtime for d in devices if "iPhone" in d["name"]))')
+          xcodebuild -project Midoku.xcodeproj -scheme Midoku -configuration Release \
+            -destination 'generic/platform=iOS' archive \
+            -archivePath build/Midoku.xcarchive -skipPackagePluginValidation \
+            CODE_SIGN_IDENTITY= CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build/archive.log
+      - name: Simulator integration tests
+        run: |
+          set -o pipefail
+          device_id=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for r,v in d["devices"].items() if "iOS-27" in r for x in v if "iPhone" in x["name"]))')
           xcrun simctl boot "$device_id" || true
           xcrun simctl bootstatus "$device_id" -b
+          xcodebuild test -project Midoku.xcodeproj -scheme Midoku -configuration Debug \
+            -destination "id=$device_id" -derivedDataPath build/Simulator \
+            -only-testing:MidokuTests/CollectionIntegrationTests -skipPackagePluginValidation \
+            CODE_SIGN_IDENTITY= CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build/integration-tests.log
           app="$PWD/build/Simulator/Build/Products/Debug-iphonesimulator/Midoku.app"
-          bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
-          xcrun simctl uninstall "$device_id" "$bundle_id" || true
           xcrun simctl install "$device_id" "$app"
           mkdir -p build/screenshots
-          for screen in home home-hidden home-settings library library-ochre library-slate browse history entry entry-dark chapters chapter-grid chapter-compact chapter-thumbnail source-grid source-entry add-entry settings settings-bottom layout chapter-settings rename search reader reader-tabs fullscreen empty-clipboard; do
-            xcrun simctl terminate "$device_id" "$bundle_id" || true
-            xcrun simctl launch "$device_id" "$bundle_id" --library-preview "--$screen-preview"
-            sleep 4
+          for screen in collection entry edit paste; do
+            xcrun simctl terminate "$device_id" com.raahat.Midoku || true
+            xcrun simctl launch "$device_id" com.raahat.Midoku --collection-preview "--$screen-preview"
+            sleep 3
             xcrun simctl io "$device_id" screenshot "build/screenshots/$screen.png"
           done
-          xcrun simctl terminate "$device_id" "$bundle_id" || true
-
-      - name: Upload simulator screenshots
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: Midoku-screenshots-${{ github.sha }}
-          path: build/screenshots/
-          if-no-files-found: error
-          retention-days: 7
-
+          xcrun simctl terminate "$device_id" com.raahat.Midoku || true
+      - name: Package IPA
+        run: |
+          mkdir -p build/package/Payload build/artifacts
+          app=build/Midoku.xcarchive/Products/Applications/Midoku.app
+          test -s "$app/Midoku"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")" = com.raahat.Midoku
+          file "$app/Midoku"
+          ditto "$app" build/package/Payload/Midoku.app
+          (cd build/package && zip -qry ../artifacts/Midoku-merged-unsigned.ipa Payload)
+          unzip -t build/artifacts/Midoku-merged-unsigned.ipa
+          (cd build/artifacts && shasum -a 256 Midoku-merged-unsigned.ipa > SHA256SUMS.txt)
+          printf 'Commit: %s\nUnsigned iOS 27 device build for LiveContainer.\n' "$GITHUB_SHA" > build/artifacts/BUILD.txt
       - name: Upload IPA
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: Midoku-unsigned-${{ github.sha }}
+          name: Midoku-merged-unsigned-${{ github.sha }}
           path: build/artifacts/
           if-no-files-found: error
-          retention-days: 7
-
-      - name: Upload archive diagnostics
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - name: Upload screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: Midoku-build-diagnostics-${{ github.sha }}
+          name: Midoku-merged-validation-${{ github.sha }}
           path: |
-            build/archive.log
-            build/simulator.log
-            build/Archive.xcresult
+            build/screenshots/
+            build/*.log
           if-no-files-found: ignore
-          retention-days: 7

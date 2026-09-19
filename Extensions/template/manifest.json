@@ -1,8 +1,0 @@
-{
-  "id": "dev.midoku.starter",
-  "name": "New source",
-  "version": "0.1.0",
-  "contractVersion": 2,
-  "domains": [],
-  "capabilities": ["search"]
-}

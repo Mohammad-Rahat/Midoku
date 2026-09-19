@@ -1,24 +1,14 @@
 // swift-tools-version: 6.2
 import PackageDescription
 
-// Test the same core sources compiled by the app, without creating a second app target.
 let package = Package(
-    name: "MidokuDevelopment",
-    platforms: [.macOS(.v14), .iOS(.v17)],
-    products: [.library(name: "MidokuExtensions", targets: ["MidokuExtensions"])],
+    name: "MidokuCollectionCore",
+    platforms: [.macOS(.v14)],
+    products: [.library(name: "MidokuCollectionCore", targets: ["MidokuCollectionCore"])],
     targets: [
-        .target(
-            name: "MidokuExtensions", path: "Midoku",
-            exclude: ["ContentView.swift", "MidokuApp.swift", "Info.plist", "plan.md", "Assets.xcassets",
-                      "Resources", "DesignSystem", "Development", "Extensions/Apple", "Settings/Apple", "Library/Apple"],
-            sources: ["Extensions/Core", "Settings/Core", "Library/Core"]
-        ),
-        .testTarget(
-            name: "MidokuExtensionsTests",
-            dependencies: ["MidokuExtensions"],
-            path: "Tests/Extensions",
-            resources: [.copy("Fixtures")]
-        )
+        .target(name: "MidokuCollectionCore", path: "Midoku/Core/Collection",
+            exclude: ["CollectionStore.swift", "CollectionReader.swift", "CollectionAdoption.swift"],
+            sources: ["CollectionModels.swift", "CollectionIntegrity.swift", "CollectionTypes.swift"]),
+        .testTarget(name: "MidokuCollectionCoreTests", dependencies: ["MidokuCollectionCore"], path: "Tests/Collection")
     ]
 )
-

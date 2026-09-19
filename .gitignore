@@ -1,10 +1,22 @@
+# Xcode
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+!*.xcodeproj/*.xcworkspace/
+
+*.xcodeproj/*.xcworkspace/*
+!*.xcodeproj/*.xcworkspace/contents.xcworkspacedata
+!*.xcodeproj/*.xcworkspace/xcshareddata/
+
+*.xcodeproj/*.xcworkspace/xcshareddata/*
+!*.xcodeproj/*.xcworkspace/xcshareddata/swiftpm/
+
+# Other
 .DS_Store
-.build/
-.swiftpm/
-DerivedData/
-**/xcuserdata/
-**/node_modules/
-Extensions/dist/
-*.xcresult
-__pycache__/
-*.pyc
+build/
+
+# Zed
+.zed
+
+# Xcode-Build-Server
+buildServer.json
