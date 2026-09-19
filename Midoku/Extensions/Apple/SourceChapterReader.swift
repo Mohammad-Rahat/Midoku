@@ -60,7 +60,7 @@ struct SourceChapterReader: View {
             })
         .sheet(isPresented: $showingPreferences) {
             NavigationStack {
-                readerSettings.toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingPreferences = false } }.sharedBackgroundVisibility(.hidden) }
+                readerSettings.toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingPreferences = false } } }
             }
         }
         .onAppear { restoreGeneration = settings.restoreGeneration; device.begin(preferences) }
@@ -284,7 +284,7 @@ struct ReaderPageImage: View {
                                     continuous: false, tap: { _ in }, loaded: {}, imageLoader: imageLoader, identity: identity)
                 }
                 .navigationTitle("Page \(index + 1)")
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { zoomSheet = false } }.sharedBackgroundVisibility(.hidden) }
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { zoomSheet = false } } }
             }
         }
         .task(id: retry) {

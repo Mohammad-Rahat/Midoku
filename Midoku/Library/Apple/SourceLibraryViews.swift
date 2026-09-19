@@ -41,7 +41,7 @@ struct AddSourceEntryView: View {
                     }
                 }
             }.settingsStyle().navigationTitle("Add to library")
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.disabled(working) }.sharedBackgroundVisibility(.hidden) }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.disabled(working) } }
         }.interactiveDismissDisabled(working)
         .sheet(item: $destination) { entry in PasteReviewView(entryID: entry.id) }
     }
@@ -73,6 +73,7 @@ struct EntrySourcesView: View {
     @Environment(LibraryCoordinator.self) private var library
     @Environment(\.dismiss) private var dismiss
     @State private var following: EntrySourceLink?
+    @State private var originalListing: LibraryListing?
     @State private var error: String?
     @State private var working = false
     var body: some View {
@@ -96,13 +97,14 @@ struct EntrySourcesView: View {
                                 if link.followsNewChapters {
                                     Button("Stop following new chapters") { change { try $0.library.editEntry(entryID) { entry in if let index = entry.links.firstIndex(where: { $0.id == link.id }) { entry.links[index].followsNewChapters = false } } } }
                                 } else { Button("Follow future chapters") { following = link }.disabled(working) }
-                                if let url = listing.details.webURL { Link("Open original listing", destination: url) }
+                                Button("Open original listing", systemImage: "arrow.up.right.square") { originalListing = listing }
                             } footer: { Text("Local title, description, author and cover edits are preserved. Chapter references remain available when following is off.") }
                         }
                     }
                 }
             }.settingsStyle().navigationTitle("Entry sources")
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.disabled(working) }.sharedBackgroundVisibility(.hidden) }
+            .modifier(OriginalListingNavigation(listing: $originalListing, extensions: extensions))
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.disabled(working) } }
         }.interactiveDismissDisabled(working)
         .confirmationDialog("Follow only future chapters?", isPresented: Binding(get: { following != nil }, set: { if !$0 { following = nil } }), titleVisibility: .visible) {
             if let link = following { Button("Follow future chapters") { follow(link) } }

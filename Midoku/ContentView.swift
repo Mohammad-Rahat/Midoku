@@ -15,6 +15,7 @@ struct ContentView: View {
     @State private var settingsPath = NavigationPath()
     @State private var hiddenBars: [MidokuTab: Bool] = [:]
     @State private var initialized = false
+    @State private var gridLandscape = false
     @State private var loadAttempt = 0
 
     init() {
@@ -56,6 +57,8 @@ struct ContentView: View {
                 }
             } else { MidokuSplashView() }
         }
+        .onGeometryChange(for: Bool.self) { $0.size.width > $0.size.height } action: { gridLandscape = $0 }
+        .environment(\.gridLandscape, gridLandscape)
         .tint(settings.snapshot.preferences.accent.color)
         .environment(\.midokuAccentFill, settings.snapshot.preferences.accent.fill)
         .environment(settings).environment(lock).environment(downloads).environment(library)
@@ -75,12 +78,16 @@ struct ContentView: View {
             if CommandLine.arguments.contains("--library-preview") {
                 do {
                     let id = try await LibraryPreviewData.prepare(settings)
+                    try await settings.commit { snapshot in
+                        snapshot.preferences.chapterLayout = ChapterLayoutPreferences(style: CommandLine.arguments.contains("--chapter-grid-preview") || CommandLine.arguments.contains("--layout-preview") ? .grid : .list)
+                        if CommandLine.arguments.contains("--empty-clipboard-preview") { snapshot.library.clipboard = [] }
+                    }
                     if CommandLine.arguments.contains("--home-preview") { selectedTab = .home }
-                    else if CommandLine.arguments.contains("--browse-preview") || CommandLine.arguments.contains("--search-preview") { selectedTab = .browse }
+                    else if CommandLine.arguments.contains("--browse-preview") || CommandLine.arguments.contains("--search-preview") || CommandLine.arguments.contains("--source-grid-preview") { selectedTab = .browse }
                     else if CommandLine.arguments.contains("--history-preview") { selectedTab = .history }
                     else if CommandLine.arguments.contains("--settings-preview") || CommandLine.arguments.contains("--settings-bottom-preview") || CommandLine.arguments.contains("--layout-preview") { selectedTab = .settings }
                     else { selectedTab = .library }
-                        if CommandLine.arguments.contains("--entry-preview") || CommandLine.arguments.contains("--rename-preview"), libraryPath.isEmpty { libraryPath.append(id) }
+                        if CommandLine.arguments.contains("--entry-preview") || CommandLine.arguments.contains("--rename-preview") || CommandLine.arguments.contains("--chapters-preview") || CommandLine.arguments.contains("--chapter-grid-preview") || CommandLine.arguments.contains("--empty-clipboard-preview"), libraryPath.isEmpty { libraryPath.append(id) }
                 } catch { settings.update { _ in throw error } }
             }
             #endif
@@ -143,9 +150,10 @@ struct ContentView: View {
             NavigationStack(path: $browsePath) {
                 #if DEBUG
                 if CommandLine.arguments.contains("--search-preview") { GlobalSearchView(extensions: extensions) }
-                else { SourceDirectoryView(extensions: extensions) }
+                else if CommandLine.arguments.contains("--source-grid-preview") { SourceGridPreview(extensions: extensions) }
+                else { SourceDirectoryView(extensions: extensions, isRoot: true) }
                 #else
-                SourceDirectoryView(extensions: extensions)
+                SourceDirectoryView(extensions: extensions, isRoot: true)
                 #endif
             }
         case .history:

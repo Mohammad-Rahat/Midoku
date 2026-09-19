@@ -36,9 +36,7 @@ struct LibraryLayoutSection: View {
                     LabeledContent("Landscape items per row", value: "\(layout.landscapeColumns)")
                 }
             }
-        } header: { Text("Layout") } footer: {
-            Text("Swipe left or right in Library to change categories. Standard shows 2 items per row in portrait; Compact shows 3. Custom lets you choose both orientations. Accessibility text uses a list.")
-        }.listRowBackground(MidokuTheme.surface)
+        } header: { Text("Library & browse layout") }.listRowBackground(MidokuTheme.surface)
     }
 
     private func updated(_ style: LibraryLayoutStyle) -> LibraryLayoutPreferences {

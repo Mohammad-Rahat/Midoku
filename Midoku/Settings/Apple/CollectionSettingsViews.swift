@@ -37,10 +37,10 @@ struct CategoriesSettingsView: View {
             }.listRowBackground(MidokuTheme.surface)
         }.settingsStyle().navigationTitle("Categories")
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { EditButton().disabled(settings.snapshot.categories.isEmpty) }.sharedBackgroundVisibility(.hidden)
+                ToolbarItem(placement: .topBarTrailing) { EditButton().disabled(settings.snapshot.categories.isEmpty) }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { edit(nil) } label: { Label("Add category", systemImage: "plus") }
-                }.sharedBackgroundVisibility(.hidden)
+                }
             }
             .sheet(isPresented: $showingEditor) {
                 NameEditor(title: editing == nil ? "New category" : "Rename category", name: name, limit: 80) { value in
@@ -79,10 +79,10 @@ struct NameEditor: View {
                 } footer: { Text("Up to \(limit) characters.") }.listRowBackground(MidokuTheme.surface)
             }.settingsStyle().navigationTitle(title)
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }.sharedBackgroundVisibility(.hidden)
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Save") { commit() }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || name.count > limit)
-                    }.sharedBackgroundVisibility(.hidden)
+                    }
                 }
         }.presentationDetents([.medium, .large])
     }
@@ -136,7 +136,7 @@ struct HomeSectionsSettingsView: View {
                 Text("Drag to reorder, or use each section's menu. Hiding or deleting a section does not remove source data or reading progress.")
             }.listRowBackground(MidokuTheme.surface)
         }.settingsStyle().navigationTitle("Home sections")
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { EditButton().disabled(settings.snapshot.homeSections.isEmpty) }.sharedBackgroundVisibility(.hidden) }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { EditButton().disabled(settings.snapshot.homeSections.isEmpty) } }
             .sheet(item: $renaming) { section in
                 NameEditor(title: "Rename section", name: section.title, limit: 100) { value in
                     settings.update { state in

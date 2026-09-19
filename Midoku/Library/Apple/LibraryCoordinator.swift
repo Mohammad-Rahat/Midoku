@@ -95,6 +95,6 @@ final class LibraryCoordinator {
                 }
             }
         }
-        refreshMessage = failed == 0 ? "Library is up to date." : "\(failed) source refresh\(failed == 1 ? "" : "es") need attention. Your saved chapters are kept."
+        refreshMessage = failed == 0 ? nil : "\(failed) source refresh\(failed == 1 ? "" : "es") need attention. Your saved chapters are kept."
     }
 }

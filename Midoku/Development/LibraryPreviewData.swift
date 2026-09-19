@@ -36,6 +36,9 @@ enum LibraryPreviewData {
             }
             if let data = UIImage(named: "MidokuArtwork")?.jpegData(compressionQuality: 0.7) {
                 try state.library.setCover(LibraryCover(data: data), for: .entry(id))
+                for slot in state.library.entry(id)?.slots ?? [] {
+                    if let variant = slot.preferred { try state.library.setCover(LibraryCover(data: data), for: .chapter(entryID: id, slotID: slot.id, variantID: variant.id)) }
+                }
             }
             _ = try state.library.createManual(title: "Weekend collection", description: "A place for chapters you choose.")
         }

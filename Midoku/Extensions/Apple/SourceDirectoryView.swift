@@ -2,8 +2,20 @@ import SwiftUI
 
 struct SourceDirectoryView: View {
     let extensions: ExtensionEnvironment
+    var isRoot = false
 
     var body: some View {
+        Group {
+            if isRoot { directory.mainScreenHeader("Browse") { actions } }
+            else {
+                directory.navigationTitle("Browse").navigationBarTitleDisplayMode(.inline)
+                    .modifier(NativeNavigationBar())
+                    .toolbar { ToolbarItemGroup(placement: .topBarTrailing) { actions } }
+            }
+        }
+    }
+
+    private var directory: some View {
         List {
             if extensions.connections.isEmpty {
                 ContentUnavailableView {
@@ -46,7 +58,9 @@ struct SourceDirectoryView: View {
         .scrollContentBackground(.hidden)
         .background(MidokuTheme.background)
         .contentMargins(.top, 0, for: .scrollContent)
-        .mainScreenHeader("Browse") {
+    }
+    private var actions: some View {
+        Group {
             NavigationLink { GlobalSearchView(extensions: extensions) } label: {
                 Label("Search all extensions", systemImage: "magnifyingglass").frame(width: 44, height: 44)
             }

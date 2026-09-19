@@ -30,7 +30,7 @@ struct GlobalSearchView: View {
                 }
             }
         }.background(MidokuTheme.background).navigationTitle("Global search").navigationBarTitleDisplayMode(.inline)
-            .modifier(SolidNavigationBar())
+            .modifier(NativeNavigationBar())
     }
 }
 
@@ -60,7 +60,7 @@ private struct GlobalSearchSection: View {
                 else if let error { SourceErrorView(message: error) { retry += 1 } }
                 else if let adapter {
                     if items.isEmpty { Text("No matches").foregroundStyle(MidokuTheme.secondaryText) }
-                    else { MangaResultsGrid(items: Array(items.prefix(6)), adapter: adapter, extensions: extensions, minimumWidth: 100) }
+                    else { MangaResultsGrid(items: Array(items.prefix(6)), adapter: adapter, extensions: extensions) }
                 }
             }
             .task(id: "\(query)-\(revision)-\(retry)") {

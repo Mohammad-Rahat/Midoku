@@ -8,7 +8,7 @@ struct MainScreenHeader<Actions: View>: ViewModifier {
             HStack(alignment: .center, spacing: 12) {
                 Text(title).font(.largeTitle.bold()).accessibilityAddTraits(.isHeader)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                actions().buttonStyle(.plain).labelStyle(.iconOnly)
+                actions().buttonStyle(MidokuIconButtonStyle()).labelStyle(.iconOnly)
             }
             .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 12)
             .background(MidokuTheme.background)
@@ -27,20 +27,31 @@ extension View {
     }
 }
 
-/// An opaque navigation bar with ordinary back and action buttons.
-struct SolidNavigationBar: ViewModifier {
-    @Environment(\.dismiss) private var dismiss
+/// Keep the native back button so navigation retains iOS interactive swipe-back.
+struct NativeNavigationBar: ViewModifier {
     func body(content: Content) -> some View {
         content
             .toolbar(.visible, for: .navigationBar)
             .toolbarBackground(MidokuTheme.background, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
-            .navigationBarBackButtonHidden()
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: { Label("Back", systemImage: "chevron.left") }
-                        .buttonStyle(.plain)
-                }.sharedBackgroundVisibility(.hidden)
-            }
+    }
+}
+
+struct MidokuIconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 20, weight: .regular))
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Circle())
+            .glassEffect(.regular.interactive(), in: .circle)
+            .opacity(configuration.isPressed ? 0.6 : 1)
+    }
+}
+
+private struct GridLandscapeKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    var gridLandscape: Bool {
+        get { self[GridLandscapeKey.self] }
+        set { self[GridLandscapeKey.self] = newValue }
     }
 }

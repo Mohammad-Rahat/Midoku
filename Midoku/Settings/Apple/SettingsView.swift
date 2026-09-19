@@ -51,7 +51,7 @@ struct SettingsListStyle: ViewModifier {
             .navigationBarTitleDisplayMode(.inline)
             .presentationBackground(MidokuTheme.background)
         if largeTitle { styled }
-        else { styled.modifier(SolidNavigationBar()) }
+        else { styled.modifier(NativeNavigationBar()) }
     }
 }
 extension View { func settingsStyle(largeTitle: Bool = false) -> some View { modifier(SettingsListStyle(largeTitle: largeTitle)) } }
@@ -171,12 +171,9 @@ struct AppearanceSettingsView: View {
                 }.padding(.vertical, 8)
             }.listRowBackground(MidokuTheme.surface)
             Section {
-                SettingPicker(title: "Browse cover density", selection: settings.binding(\.coverDensity))
-                NavigationLink("Library layout") { LibrarySettingsView() }
+                NavigationLink("Library, browse & chapter layout") { LibrarySettingsView() }
                 SettingPicker(title: "Open on launch", selection: settings.binding(\.launchTab))
-            } header: { Text("Layout") } footer: {
-                Text("Browse cover density applies to source grids. Library has its own layout settings. Larger accessibility text keeps covers and labels comfortably spaced. Your launch tab is used the next time Midoku opens.")
-            }.listRowBackground(MidokuTheme.surface)
+            } header: { Text("Layout") }.listRowBackground(MidokuTheme.surface)
             Section("Preview") {
                 HStack(spacing: 12) {
                     Image("MidokuCoverPlaceholder").resizable().scaledToFit().frame(width: 56, height: 84)
@@ -204,14 +201,8 @@ struct LibrarySettingsView: View {
             Section {
                 SettingPicker(title: "Default sort", selection: settings.binding(\.librarySort))
                 Toggle("Refresh when opening the app", isOn: settings.binding(\.refreshOnLaunch))
-            } header: { Text("Library defaults") } footer: {
-                Text("Sort your library and check followed sources when opening the app. Pull to refresh for an immediate check.")
-            }.listRowBackground(MidokuTheme.surface)
-            Section {
-                Toggle("Show chapter thumbnails", isOn: settings.binding(\.chapterThumbnails))
-            } header: { Text("Chapter lists") } footer: {
-                Text("Chapter thumbnails use the first page, or your custom chapter cover. Previews load as chapters become visible and are cached on this device.")
-            }.listRowBackground(MidokuTheme.surface)
+            } header: { Text("Library defaults") }.listRowBackground(MidokuTheme.surface)
+            ChapterLayoutSection()
         }.settingsStyle().navigationTitle("Library")
     }
 }

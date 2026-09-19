@@ -33,10 +33,10 @@ struct SourceVerificationView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { coordinator.cancel(id: challenge.id) }
-                }.sharedBackgroundVisibility(.hidden)
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Retry request") { coordinator.retry(id: challenge.id) }
-                }.sharedBackgroundVisibility(.hidden)
+                }
             }
         }
         .interactiveDismissDisabled()

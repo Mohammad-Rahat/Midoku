@@ -387,3 +387,12 @@ contract. esbuild still performs the TypeScript compilation and bundling.
 - Added cache persistence/eviction/clearing, partial-add persistence/full refresh, history migration and mixed-source reset regression tests. Local extension checks pass (21 tests); native verification and simulator layout review run in the IPA workflow.
 
 - Native verification passed all 60 Swift tests and 21 extension tests. Simulator review confirmed the compact title headers and stable reader page frame, and caught a status-area overlap in reader chrome; controls now read safe-area insets from a separate outer container. The Settings boundary preview explicitly scrolls to the last row.
+
+## 2026-09-19 navigation and chapter layout follow-up
+
+- Restored native navigation back buttons and system glass toolbar actions, retaining compact root headers and the solid, space-reserving bottom navigation. Root action icons now share 20-point glyphs and 44-point glass controls; pushed Browse directories keep the native navigation bar.
+- Chapter thumbnails use portrait 2:3 frames. Settings → Library offers independent chapter list/grid mode and portrait/landscape items per row. Both personal and source entry grids keep selection, reading, downloads and chapter actions, and use virtualized native List rows. Accessibility text falls back to lists.
+- Library, source browsing and global search now use the same manga layout preference and viewport orientation. Removed the conflicting legacy Browse density control; existing preferences continue to decode.
+- Hide empty chapter clipboard/paste actions. Personal-entry paste opens the paste review directly. Removed successful refresh status and chapter ordering explanations while preserving failures and source metadata.
+- Original-listing actions resolve exact source identities into native entries when the extension is enabled. Website fallback and source website links present an internal Safari sheet, without changing source sessions or launching external Safari.
+- Added settings migration, restart persistence and invalid-backup count checks, plus simulator captures for portrait chapter lists, chapter grids, source grids and empty clipboard state. Native build and screenshot verification are pending.

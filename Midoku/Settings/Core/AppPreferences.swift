@@ -98,6 +98,8 @@ nonisolated struct AppPreferences: Codable, Equatable, Sendable {
     var librarySort: LibrarySort = .recentlyAdded
     var refreshOnLaunch = true
     var chapterThumbnails = true
+    var chapterLayout: ChapterLayoutPreferences? = nil
+    var resolvedChapterLayout: ChapterLayoutPreferences { chapterLayout ?? ChapterLayoutPreferences() }
     var reader = ReaderPreferences()
     var wifiOnlyDownloads = true
     var appLock = false
@@ -194,6 +196,7 @@ nonisolated struct AppSnapshot: Codable, Sendable {
             throw SettingsFailure.invalidBackup
         }
         try preferences.resolvedLibraryLayout.validate()
+        try preferences.resolvedChapterLayout.validate()
         let sourceIDs = Set(connections.map(\.id))
         try library.validate(connections: sourceIDs, categories: Set(categories.map(\.id)))
         for pin in homeSections {

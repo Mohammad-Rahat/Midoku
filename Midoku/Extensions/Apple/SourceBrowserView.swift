@@ -22,7 +22,7 @@ struct SourceBrowserView: View {
         .background(MidokuTheme.background)
         .navigationTitle(connection.name)
         .navigationBarTitleDisplayMode(.inline)
-        .modifier(SolidNavigationBar())
+        .modifier(NativeNavigationBar())
         .task(id: retry) {
             do {
                 adapter = try await extensions.adapter(for: connection)
@@ -133,8 +133,7 @@ private struct SourceBrowserContent: View {
                         ContentUnavailableView("No manga found", systemImage: "magnifyingglass",
                                                description: Text("Try another title or change your filters."))
                     }
-                    MangaResultsGrid(items: results.items, adapter: adapter, extensions: extensions,
-                                     minimumWidth: dynamicTypeSize.isAccessibilitySize ? 200 : settings.snapshot.preferences.coverDensity.minimumWidth)
+                    MangaResultsGrid(items: results.items, adapter: adapter, extensions: extensions)
                     if results.nextCursor != nil {
                         Button {
                             pageRequest += 1
@@ -171,13 +170,13 @@ private struct SourceBrowserContent: View {
             Button("Done", role: .cancel) { }
         } message: { Text(pinMessage ?? "") }
         .sheet(isPresented: $showHomeSections) {
-            NavigationStack { HomeSectionsSettingsView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { showHomeSections = false } }.sharedBackgroundVisibility(.hidden) } }
+            NavigationStack { HomeSectionsSettingsView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { showHomeSections = false } } } }
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { if let selectedTab { pin(selectedTab) } } label: { Label("Pin to Home", systemImage: "pin") }
                     .disabled(selectedTab == nil)
-            }.sharedBackgroundVisibility(.hidden)
+            }
             if adapter.manifest.capabilities.contains(.filters) {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -186,7 +185,7 @@ private struct SourceBrowserContent: View {
                         Label((request?.filters.isEmpty ?? true) ? "Filters" : "Filters (\(request?.filters.count ?? 0))",
                               systemImage: (request?.filters.isEmpty ?? true) ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill")
                     }
-                }.sharedBackgroundVisibility(.hidden)
+                }
             }
         }
         .sheet(isPresented: $showingFilters) {
@@ -332,10 +331,13 @@ struct MangaResultsGrid: View {
     let items: [MangaSummary]
     let adapter: any SourceAdapter
     let extensions: ExtensionEnvironment
-    let minimumWidth: CGFloat
+    @Environment(AppSettingsStore.self) private var settings
+    @Environment(\.gridLandscape) private var landscape
+    @Environment(\.dynamicTypeSize) private var textSize
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: minimumWidth, maximum: 240), spacing: 12, alignment: .top)],
+        let count = textSize.isAccessibilitySize ? 1 : settings.snapshot.preferences.resolvedLibraryLayout.columns(landscape: landscape)
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 0), spacing: 12, alignment: .top), count: count),
                   alignment: .leading, spacing: 20) {
             ForEach(items) { item in
                 NavigationLink {

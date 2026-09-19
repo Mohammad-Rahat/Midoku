@@ -160,7 +160,7 @@ struct RestorePreviewView: View {
                     if busy { ProgressView("Restoring") }
                 }.listRowBackground(MidokuTheme.surface)
             }.settingsStyle().navigationTitle("Review backup").disabled(busy)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(busy) }.sharedBackgroundVisibility(.hidden) }
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(busy) } }
                 .interactiveDismissDisabled(busy)
                 .confirmationDialog(merge ? "Merge this backup?" : "Replace your current setup?", isPresented: $confirming, titleVisibility: .visible) {
                     Button(merge ? "Merge" : "Replace", role: merge ? nil : .destructive) { restore() }

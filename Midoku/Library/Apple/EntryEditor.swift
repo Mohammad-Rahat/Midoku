@@ -60,8 +60,8 @@ struct EntryEditor: View {
                 if let error { Text(error).foregroundStyle(MidokuTheme.danger) }
             }.settingsStyle().navigationTitle(isNew ? "New entry" : "Edit details")
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }.sharedBackgroundVisibility(.hidden)
-                    ToolbarItem(placement: .confirmationAction) { Button(saving ? "Saving…" : "Save") { save() }.disabled(saving) }.sharedBackgroundVisibility(.hidden)
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                    ToolbarItem(placement: .confirmationAction) { Button(saving ? "Saving…" : "Save") { save() }.disabled(saving) }
                 }
         }.interactiveDismissDisabled(saving)
     }
@@ -172,7 +172,7 @@ struct CategoryAssignmentView: View {
                 if let error { Text(error).foregroundStyle(MidokuTheme.danger) }
             }.settingsStyle().navigationTitle("Assign categories")
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }.sharedBackgroundVisibility(.hidden)
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) { Button("Apply") { Task { do {
                         let categories = chosen.intersection(settings.snapshot.categories.map(\.id))
                         try await settings.commit { state in for id in entryIDs { try state.library.editEntry(id) { entry in
@@ -181,7 +181,7 @@ struct CategoryAssignmentView: View {
                             else { entry.categoryIDs.formUnion(categories) }
                         } } }
                         dismiss()
-                    } catch { self.error = error.localizedDescription } } } }.sharedBackgroundVisibility(.hidden)
+                    } catch { self.error = error.localizedDescription } } } }
                 }
         }
     }

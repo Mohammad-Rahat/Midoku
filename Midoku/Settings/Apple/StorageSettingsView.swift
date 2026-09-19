@@ -201,7 +201,7 @@ struct OfflineChapterReader: View {
             })
         .background(preferences.background == .black ? Color.black : (preferences.background == .paper ? Color.white : MidokuTheme.background))
         .sheet(isPresented: $showPreferences) {
-            NavigationStack { readerSettings.toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showPreferences = false } }.sharedBackgroundVisibility(.hidden) } }
+            NavigationStack { readerSettings.toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showPreferences = false } } } }
         }
         .onAppear {
             restoreGeneration = settings.restoreGeneration

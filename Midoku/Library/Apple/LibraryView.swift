@@ -8,6 +8,7 @@ struct LibraryView: View {
     @Environment(LibraryCoordinator.self) private var library
     @Environment(DownloadManager.self) private var downloads
     @Environment(\.dynamicTypeSize) private var textSize
+    @Environment(\.gridLandscape) private var gridLandscape
     @State private var query = ""
     @State private var submittedQuery = ""
     @State private var category = "all"
@@ -65,7 +66,7 @@ struct LibraryView: View {
                         }
                     } label: { Label(settings.snapshot.preferences.librarySort.title, systemImage: "chevron.down").font(.caption) }
                     Spacer()
-                    NavigationLink { LibrarySettingsView() } label: { Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44) }
+                    NavigationLink { LibrarySettingsView() } label: { Image(systemName: "slider.horizontal.3").font(.system(size: 20)).frame(width: 44, height: 44) }
                         .accessibilityLabel("Library layout and settings")
                 }.foregroundStyle(MidokuTheme.secondaryText).padding(.horizontal, 16)
             }
@@ -74,7 +75,7 @@ struct LibraryView: View {
             } else {
                 TabView(selection: $category) {
                     ForEach(categoryIDs, id: \.self) { id in
-                        categoryPage(id, width: geometry.size.width, landscape: geometry.size.width > geometry.size.height).tag(id)
+                        categoryPage(id, width: geometry.size.width, landscape: gridLandscape).tag(id)
                     }
                 }.tabViewStyle(.page(indexDisplayMode: .never))
             }
@@ -84,15 +85,15 @@ struct LibraryView: View {
         }
         .mainScreenHeader(selecting ? "\(selected.count) selected" : "Library") {
             HStack(spacing: 16) {
-                Button(selecting ? "Done" : "Select") { selecting.toggle(); selected.removeAll() }.disabled(state.entries.isEmpty)
+                Button(selecting ? "Done" : "Select") { selecting.toggle(); selected.removeAll() }.font(.subheadline).buttonStyle(.plain).frame(minHeight: 44).disabled(state.entries.isEmpty)
                 Menu {
                     Button("New empty entry", systemImage: "plus") { creating = true }
                     Button("Find manga", systemImage: "magnifyingglass", action: browse)
-                    NavigationLink { ClipboardView() } label: { Label("Clipboard (\(state.clipboard.count))", systemImage: "doc.on.clipboard") }
+                    if !state.clipboard.isEmpty { NavigationLink { ClipboardView() } label: { Label("Clipboard (\(state.clipboard.count))", systemImage: "doc.on.clipboard") } }
                     Button("Refresh library", systemImage: "arrow.clockwise") { Task { await library.refresh() } }.disabled(library.refreshing)
                     Toggle("List layout", isOn: $listLayout)
                     Picker("Sort", selection: settings.binding(\.librarySort)) { ForEach(LibrarySort.allCases) { Text($0.title).tag($0) } }
-                } label: { Image(systemName: "plus.circle").accessibilityLabel("Library actions") }
+                } label: { Image(systemName: "plus").accessibilityLabel("Library actions") }
             }
         }
         .safeAreaInset(edge: .bottom) {
@@ -172,7 +173,7 @@ struct LibraryView: View {
             Picker("Reading status", selection: $status) { Text("Any status").tag(PersonalStatus?.none); ForEach(PersonalStatus.allCases) { Text($0.title).tag(Optional($0)) } }
             Picker("Source", selection: $sourceID) { Text("All sources").tag(UUID?.none); ForEach(settings.snapshot.connections) { Text($0.name).tag(Optional($0.id)) } }
             Picker("Publication", selection: $publication) { Text("Any publication").tag("all"); ForEach(["ongoing", "completed", "hiatus", "cancelled"], id: \.self) { Text($0.capitalized).tag($0) } }
-        } label: { Image(systemName: "line.3.horizontal.decrease").frame(minWidth: 36, minHeight: 32) }.accessibilityLabel("Filter library")
+        } label: { Image(systemName: "line.3.horizontal.decrease").font(.system(size: 20)).frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Filter library")
     }
     @ViewBuilder private func entryLink(_ entry: PersonalEntry, compact: Bool, width: CGFloat? = nil) -> some View {
         if selecting {
