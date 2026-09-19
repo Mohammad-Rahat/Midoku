@@ -24,10 +24,23 @@ struct EntryOverview<Cover: View, Action: View>: View {
                 }
                 if !metadata.isEmpty { Text(metadata).font(.caption).foregroundStyle(MidokuTheme.secondaryText) }
                 if let detail, !detail.isEmpty { Text(detail).font(.caption.weight(.semibold)).foregroundStyle(.tint) }
-                action().font(.subheadline.weight(.semibold)).buttonStyle(.borderedProminent).controlSize(.small)
+                action().buttonStyle(EntryReadingButtonStyle())
                     .padding(.top, 2)
             }.frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+}
+
+private struct EntryReadingButtonStyle: ButtonStyle {
+    @Environment(\.midokuAccentFill) private var accentFill
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.font(.subheadline.weight(.semibold))
+            .foregroundStyle(MidokuTheme.onAccent)
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            .frame(minHeight: 44)
+            .background(accentFill, in: RoundedRectangle(cornerRadius: 12))
+            .opacity(configuration.isPressed ? 0.8 : 1)
     }
 }
 

@@ -57,7 +57,7 @@ struct SourceEntryView: View {
 
     var body: some View {
         List {
-            Section {
+            Group {
                 VStack(alignment: .leading, spacing: 12) {
                     SourceEntryHeader(summary: summary, details: details, adapter: adapter, extensions: extensions)
                     if let details { EntrySynopsis(text: details.description) }
@@ -75,7 +75,7 @@ struct SourceEntryView: View {
                 ProgressView("Loading entry").listRowBackground(MidokuTheme.surface)
             }
             if details != nil, !existingEntries.isEmpty || actionMessage != nil {
-                Section {
+                Group {
                     ForEach(existingEntries) { entry in
                         NavigationLink { LibraryEntryView(entryID: entry.id, extensions: extensions) } label: {
                             Label("Open \(settings.snapshot.library.title(entry))", systemImage: "books.vertical")
@@ -85,7 +85,7 @@ struct SourceEntryView: View {
                 }.listRowBackground(MidokuTheme.background)
             }
             if adapter.manifest.capabilities.contains(.chapters) {
-                Section {
+                Group {
                     HStack(spacing: 12) {
                         if let languages = details?.availableLanguages, languages.count > 1, adapter.manifest.contractVersion >= 2 {
                             Picker("Language", selection: $chapterLanguage) {
@@ -101,7 +101,7 @@ struct SourceEntryView: View {
                                 Label("Chapter clipboard", systemImage: "doc.on.clipboard").labelStyle(.iconOnly)
                             }.buttonStyle(MidokuIconButtonStyle())
                         }
-                    }
+                    }.listRowSeparator(.hidden)
                     if chapters.isLoading { ProgressView("Loading chapters") }
                     if let error = chapters.errorMessage {
                         SourceErrorView(message: error) {

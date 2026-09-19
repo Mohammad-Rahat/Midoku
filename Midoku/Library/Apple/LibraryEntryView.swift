@@ -37,7 +37,7 @@ struct LibraryEntryView: View {
             if let entry {
                 ScrollViewReader { proxy in
                 List {
-                    Section {
+                    Group {
                         VStack(alignment: .leading, spacing: 12) {
                             header(entry)
                             EntrySynopsis(text: state.description(entry))
@@ -47,7 +47,7 @@ struct LibraryEntryView: View {
                         Section { Label(error, systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(MidokuTheme.secondaryText) }.listRowBackground(MidokuTheme.surface)
                     }
                     if let message { Section { Text(message).font(.caption) }.listRowBackground(MidokuTheme.surface) }
-                    Section {
+                    Group {
                         HStack {
                             Text("\(entry.slots.count) chapters").font(.subheadline.weight(.semibold))
                             Spacer()
@@ -59,7 +59,7 @@ struct LibraryEntryView: View {
                                 Label(selecting ? "Finish selection" : "Select chapters", systemImage: selecting ? "checkmark" : "checkmark.circle")
                                     .labelStyle(.iconOnly)
                             }.buttonStyle(MidokuIconButtonStyle())
-                        }.id("chapter-header")
+                        }.id("chapter-header").listRowSeparator(.hidden)
                         if entry.slots.isEmpty {
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("Your next read starts here").font(.headline)
@@ -132,9 +132,11 @@ struct LibraryEntryView: View {
 
     private func header(_ entry: PersonalEntry) -> some View {
         let metadata = state.listing(entry.primaryListingID)?.details
+        let status = [entry.status.title, metadata?.status?.capitalized].compactMap { $0 }
         let categories = settings.snapshot.categories.filter { entry.categoryIDs.contains($0.id) }.map(\.name)
+            .filter { category in !status.contains { $0.localizedCaseInsensitiveCompare(category) == .orderedSame } }
         return EntryOverview(title: state.title(entry), author: entry.authorOverride ?? metadata?.authors?.joined(separator: ", "),
-            metadata: ([entry.status.title, metadata?.status?.capitalized].compactMap { $0 } + categories).joined(separator: " · "),
+            metadata: (status + categories).joined(separator: " · "),
             detail: "\(entry.slots.filter { !state.isRead($0) }.count) unread") {
                 LibraryCoverView(entry: entry, extensions: extensions)
             } action: {
