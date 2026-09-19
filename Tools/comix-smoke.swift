@@ -17,11 +17,14 @@ let script = #"""
  const env=await import(new URL(name,main).href),values=Object.values(env);
  const api=values.find(x=>x&&typeof x.list==='function'&&typeof x.chapters==='function');
  const http=values.find(x=>x&&typeof x.get==='function'&&typeof x.post==='function'&&typeof x.patch==='function'&&typeof x.delete==='function'&&!x.chapters&&!x.interceptors);
- const list=await api.list({limit:5,content_rating:['safe'],page:1});
- const item=list.items.find(x=>x.contentRating==='safe'||x.content_rating==='safe');
- if(!item)throw Error('No safe sample');
+ const list=await api.list({limit:5,content_rating:['safe'],page:1,order:{views_30d:'desc'}});
+ let item,chapters;
+ for(const candidate of list.items.filter(x=>x.contentRating==='safe'||x.content_rating==='safe')) {
+   const result=await api.chapters(candidate.hid,{limit:5,page:1,order:{number:'asc'}});
+   if(result.items?.length){item=candidate;chapters=result;break;}
+ }
+ if(!item){window.smokeResult=JSON.stringify({ok:false,error:'No chapters in sample',meta:list.meta||list.pagination,hosts:[...new Set(list.items.map(x=>x.poster?.medium).filter(Boolean).map(x=>new URL(x).hostname))]});return;}
  const detail=await api.get(item.hid);
- const chapters=await api.chapters(item.hid,{limit:5,page:1,order:{number:'asc'}});
  const chapter=await http.get('/chapters/'+chapters.items[0].id);
  const pages=chapter.pages,items=Array.isArray(pages)?pages:pages.items;
  const urls=items.map(x=>x.url.startsWith('http')?x.url:(pages.baseUrl||'').replace(/\/$/,'')+'/'+x.url.replace(/^\//,''));
