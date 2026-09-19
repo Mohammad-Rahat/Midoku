@@ -31,6 +31,16 @@ the one native retry after fresh clearance and a finished non-challenge page;
 the coordinator judges the actual retry response. An old response code alone no
 longer holds the sheet open. This observation does not prove native access works.
 
+The [revision-4 live probe](https://github.com/Mohammad-Rahat/Midoku/actions/runs/35453048332)
+accepted all observed required local frames, reducing blocked live navigations to
+zero. The deterministic nested-frame scripts executed. However, both browser
+configurations still received HTTP 403 on the macOS runner; the native retry was
+403 and the actual bundled NovelCrow search failed with HTTP 403. Do not describe
+this as successful live source verification. The probe's green workflow status
+means the deterministic frame assertions passed and the live observations were
+collected, not that the live search succeeded. The cause of that runner's 403
+has not been established, and its result is not an iPhone/LiveContainer test.
+
 Midoku also deleted/reseeded cookies through WebKit's global default store while
 replaying the rejected request's complete Cookie header. This could replay stale
 clearance and separated cookies from their source profile's other browser state.
