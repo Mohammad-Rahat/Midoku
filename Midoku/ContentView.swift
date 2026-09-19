@@ -13,7 +13,6 @@ struct ContentView: View {
     @State private var browsePath = NavigationPath()
     @State private var historyPath = NavigationPath()
     @State private var settingsPath = NavigationPath()
-    @State private var hiddenBars: [MidokuTab: Bool] = [:]
     @State private var initialized = false
     @State private var gridLandscape = false
     @State private var loadAttempt = 0
@@ -79,18 +78,25 @@ struct ContentView: View {
                 do {
                     let id = try await LibraryPreviewData.prepare(settings)
                     try await settings.commit { snapshot in
-                        let gridPreview = ["--chapter-grid-preview", "--chapter-compact-preview", "--chapter-thumbnail-preview", "--layout-preview", "--chapter-settings-preview"].contains(where: CommandLine.arguments.contains)
+                        let gridPreview = ["--chapter-grid-preview", "--chapter-compact-preview", "--chapter-thumbnail-preview", "--layout-preview", "--chapter-settings-preview", "--entry-preview", "--entry-dark-preview", "--source-entry-preview"].contains(where: CommandLine.arguments.contains)
                         snapshot.preferences.chapterLayout = ChapterLayoutPreferences(style: gridPreview ? .grid : .list,
                             gridStyle: CommandLine.arguments.contains("--chapter-compact-preview") ? .compact :
                                 (CommandLine.arguments.contains("--chapter-thumbnail-preview") ? .thumbnail : .standard))
                         if CommandLine.arguments.contains("--empty-clipboard-preview") { snapshot.library.clipboard = [] }
+                        snapshot.preferences.accent = CommandLine.arguments.contains("--library-slate-preview") ? .slate :
+                            (["--library-ochre-preview", "--entry-dark-preview", "--add-entry-preview"].contains(where: CommandLine.arguments.contains) ? .ochre : .forest)
+                        snapshot.preferences.appearance = ["--library-ochre-preview", "--entry-dark-preview"].contains(where: CommandLine.arguments.contains) ? .dark : .light
+                        snapshot.preferences.showHomeUpdates = !CommandLine.arguments.contains("--home-hidden-preview")
+                        if let index = snapshot.connections.firstIndex(where: { $0.extensionID == "dev.midoku.fixture-a" }) {
+                            snapshot.connections[index].isEnabled = ["--source-entry-preview", "--add-entry-preview"].contains(where: CommandLine.arguments.contains)
+                        }
                     }
-                    if CommandLine.arguments.contains("--home-preview") { selectedTab = .home }
-                    else if CommandLine.arguments.contains("--browse-preview") || CommandLine.arguments.contains("--search-preview") || CommandLine.arguments.contains("--source-grid-preview") { selectedTab = .browse }
+                    if ["--home-preview", "--home-hidden-preview", "--home-settings-preview", "--reader-tabs-preview"].contains(where: CommandLine.arguments.contains) { selectedTab = .home }
+                    else if ["--browse-preview", "--search-preview", "--source-grid-preview", "--source-entry-preview", "--add-entry-preview"].contains(where: CommandLine.arguments.contains) { selectedTab = .browse }
                     else if CommandLine.arguments.contains("--history-preview") { selectedTab = .history }
                     else if CommandLine.arguments.contains("--settings-preview") || CommandLine.arguments.contains("--settings-bottom-preview") || (CommandLine.arguments.contains("--layout-preview") || CommandLine.arguments.contains("--chapter-settings-preview")) { selectedTab = .settings }
                     else { selectedTab = .library }
-                        if ["--entry-preview", "--rename-preview", "--chapters-preview", "--chapter-grid-preview", "--chapter-compact-preview", "--chapter-thumbnail-preview", "--empty-clipboard-preview"].contains(where: CommandLine.arguments.contains), libraryPath.isEmpty { libraryPath.append(id) }
+                        if ["--entry-preview", "--entry-dark-preview", "--rename-preview", "--chapters-preview", "--chapter-grid-preview", "--chapter-compact-preview", "--chapter-thumbnail-preview", "--empty-clipboard-preview"].contains(where: CommandLine.arguments.contains), libraryPath.isEmpty { libraryPath.append(id) }
                 } catch { settings.update { _ in throw error } }
             }
             #endif
@@ -118,18 +124,12 @@ struct ContentView: View {
     }
 
     private var tabs: some View {
-        VStack(spacing: 0) {
         TabView(selection: $selectedTab) {
             ForEach(MidokuTab.allCases) { tab in
-                tabContent(tab)
-                    .tag(tab)
-                    .toolbar(.hidden, for: .tabBar)
-                    .onPreferenceChange(AppTabBarHiddenPreference.self) { hiddenBars[tab] = $0 }
+                Tab(tab.title, systemImage: tab.systemImage, value: tab) {
+                    tabContent(tab)
+                }
             }
-        }
-        .toolbar(.hidden, for: .tabBar)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        if hiddenBars[selectedTab] != true { TraditionalTabBar(selection: $selectedTab) }
         }
         .background(MidokuTheme.background)
         .sheet(item: Binding(get: { extensions.challenges.current }, set: { value in
@@ -142,7 +142,13 @@ struct ContentView: View {
         switch tab {
         case .home:
             NavigationStack(path: $homePath) {
+                #if DEBUG
+                if CommandLine.arguments.contains("--home-settings-preview") { HomeSectionsSettingsView() }
+                else if CommandLine.arguments.contains("--reader-tabs-preview") { ReaderChromePreview() }
+                else { PinnedHomeView(extensions: extensions) { selectedTab = .browse } }
+                #else
                 PinnedHomeView(extensions: extensions) { selectedTab = .browse }
+                #endif
             }
         case .library:
             NavigationStack(path: $libraryPath) {
@@ -153,6 +159,7 @@ struct ContentView: View {
             NavigationStack(path: $browsePath) {
                 #if DEBUG
                 if CommandLine.arguments.contains("--search-preview") { GlobalSearchView(extensions: extensions) }
+                else if CommandLine.arguments.contains("--source-entry-preview") || CommandLine.arguments.contains("--add-entry-preview") { SourceEntryPreview(extensions: extensions) }
                 else if CommandLine.arguments.contains("--source-grid-preview") { SourceGridPreview(extensions: extensions) }
                 else { SourceDirectoryView(extensions: extensions, isRoot: true) }
                 #else

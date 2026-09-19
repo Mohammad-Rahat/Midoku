@@ -62,6 +62,14 @@ final class ExtensionEnvironment {
             for source in try AppExtensionCatalogue.load() where !existing.contains(source.manifest.id) {
                 try await registry.registerBundled(manifest: source.manifest, javaScript: source.javaScript)
             }
+            #if DEBUG
+            if CommandLine.arguments.contains("--library-preview"),
+               CommandLine.arguments.contains("--source-entry-preview") || CommandLine.arguments.contains("--add-entry-preview") {
+                let manifest = ExtensionManifest(id: "dev.midoku.fixture-a", name: "Source A", version: "1.0.0",
+                    contractVersion: 1, domains: [], capabilities: [.search, .feeds, .details, .chapters])
+                try await registry.registerBundled(manifest: manifest, javaScript: DevelopmentFixtureBundles.sourceA)
+            }
+            #endif
             available = await registry.manifests()
             errorMessage = nil
             isReady = true

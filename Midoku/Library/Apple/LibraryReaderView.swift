@@ -38,7 +38,7 @@ struct LibraryReaderView: View {
                 } else { ProgressView("Opening chapter") }
             } else { ContentUnavailableView("Chapter removed", systemImage: "book.closed", description: Text("Return to the entry to choose another chapter. Your saved progress is kept.")) }
         }
-        .preference(key: AppTabBarHiddenPreference.self, value: true)
+        .toolbar(.hidden, for: .tabBar)
         .environment(\.readerChapterNavigation, chapterNavigation)
         .environment(\.readerCoverContext, ReaderCoverContext(entryID: entryID, slotID: slotID))
         .onPreferenceChange(ReaderControlsPreference.self) { controlsVisible = $0 }

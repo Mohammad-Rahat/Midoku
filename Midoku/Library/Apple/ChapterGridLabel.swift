@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Shared by library and source chapters: at most three single-line text rows.
 struct ChapterGridLabel<Cover: View>: View {
+    @Environment(\.midokuAccentFill) private var accentFill
     let title: String
     let subtitle: String?
     let detail: String?
@@ -40,7 +41,7 @@ struct ChapterGridLabel<Cover: View>: View {
     @ViewBuilder private var selection: some View {
         if let selected {
             Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                .font(.title2).foregroundStyle(.white, .green).padding(4)
+                .font(.title2).foregroundStyle(.white, accentFill).padding(4)
         }
     }
 }

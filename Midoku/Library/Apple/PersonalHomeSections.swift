@@ -25,7 +25,7 @@ struct PersonalHomeSections: View {
 
             }
         }
-        if !state.updates.isEmpty {
+        if settings.snapshot.preferences.homeUpdatesVisible, !state.updates.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text("Library updates").font(.title3.bold())
@@ -42,12 +42,6 @@ struct PersonalHomeSections: View {
                         }.buttonStyle(.plain)
                     }
                 }
-            }.padding(.horizontal, 20)
-        }
-        if recent.isEmpty && state.updates.isEmpty && !state.entries.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Your library is ready").font(.title3.bold())
-                Text("Open an entry to start reading. Your recent reads and newly discovered chapters will appear here.").font(.callout).foregroundStyle(MidokuTheme.secondaryText)
             }.padding(.horizontal, 20)
         }
     }

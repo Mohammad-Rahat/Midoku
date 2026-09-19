@@ -27,6 +27,8 @@ nonisolated struct EntrySourceLink: Codable, Identifiable, Sendable {
     var followsNewChapters: Bool
     var language: String?
     var followBaseline: Set<UUID>? = nil
+    // A partial initial add still imports the existing catalogue when following is off.
+    var needsInitialImport: Bool? = nil
 }
 
 /// nil inherits; an empty string deliberately clears a field. Source records never change.
@@ -187,12 +189,15 @@ nonisolated struct LibraryState: Codable, Sendable {
     }
 
     @discardableResult
-    mutating func add(details: MangaDetails, connectionID: UUID, records: [ChapterRecord], language: String?, categories: Set<UUID> = [], complete: Bool = true) throws -> UUID {
+    mutating func add(details: MangaDetails, connectionID: UUID, records: [ChapterRecord], language: String?, categories: Set<UUID> = [], complete: Bool = true,
+                      status: PersonalStatus = .planned, followsNewChapters: Bool = true) throws -> UUID {
         let listingID = try remember(details: details, connectionID: connectionID, records: records, complete: complete, language: language)
         if let existing = entries.first(where: { $0.links.contains { $0.listingID == listingID } }) { return existing.id }
         var entry = PersonalEntry()
         entry.primaryListingID = listingID; entry.categoryIDs = categories
-        entry.links = [EntrySourceLink(listingID: listingID, followsNewChapters: true, language: language)]
+        entry.links = [EntrySourceLink(listingID: listingID, followsNewChapters: followsNewChapters,
+            language: language, needsInitialImport: !complete)]
+        entry.status = status
         let keys = Set(records.map(\.id))
         entry.slots = chapters.filter { $0.identity.listing == listing(listingID)?.identity && keys.contains($0.record.id) }
             .map { ChapterSlot(variant: ChapterVariant(chapterID: $0.id)) }
@@ -238,20 +243,21 @@ nonisolated struct LibraryState: Codable, Sendable {
         let incoming = chapters.filter { $0.identity.listing == identity && $0.available && (language == nil || $0.record.language == language) }
         for index in entries.indices {
             guard let link = entries[index].links.first(where: { $0.listingID == listingID }),
-                  link.followsNewChapters, link.language == language else { continue }
+                  (link.followsNewChapters || link.needsInitialImport == true), link.language == language else { continue }
             var entry = entries[index]
             let present = Set(entry.slots.flatMap(\.variants).map(\.chapterID))
             let additions = incoming.filter { !present.contains($0.id) && !entry.exclusions.contains($0.id) && !(link.followBaseline ?? []).contains($0.id) }
             // Equal numbers stay separate; grouping always requires explicit equivalence confirmation.
             for item in additions {
                 entry.slots.append(ChapterSlot(variant: ChapterVariant(chapterID: item.id)))
-                if !updates.contains(where: { $0.entryID == entry.id && $0.chapterID == item.id }) {
+                if link.needsInitialImport != true, !updates.contains(where: { $0.entryID == entry.id && $0.chapterID == item.id }) {
                     updates.append(LibraryUpdate(entryID: entry.id, chapterID: item.id))
                 }
             }
             if let linkIndex = entry.links.firstIndex(where: { $0.id == link.id }), entry.links[linkIndex].followBaseline != nil {
                 entry.links[linkIndex].followBaseline?.formUnion(incoming.map(\.id))
             }
+            if let linkIndex = entry.links.firstIndex(where: { $0.id == link.id }) { entry.links[linkIndex].needsInitialImport = false }
             if !entry.manualOrder { sortSequence(&entry) }
             entry.sequenceRevision += 1
             if !additions.isEmpty { entry.updatedAt = Date() }

@@ -41,9 +41,11 @@ extension AppSettingsStore {
 }
 
 struct SettingsListStyle: ViewModifier {
+    @Environment(AppSettingsStore.self) private var settings
     var largeTitle = false
     func body(content: Content) -> some View {
         let styled = content.listStyle(.insetGrouped)
+            .tint(settings.snapshot.preferences.accent.color)
             .scrollContentBackground(.hidden)
             .background(MidokuTheme.background)
             .foregroundStyle(MidokuTheme.primaryText)

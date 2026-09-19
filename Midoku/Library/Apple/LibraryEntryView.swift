@@ -22,7 +22,6 @@ struct LibraryEntryView: View {
     @State private var sourceID: UUID?
     @State private var language = "all"
     @State private var group = "all"
-    @State private var expanded = false
     @State private var renamedSlot: ChapterSlot?
     @State private var editedSlot: ChapterSlot?
     @State private var alternatives: ChapterSlot?
@@ -38,13 +37,12 @@ struct LibraryEntryView: View {
             if let entry {
                 ScrollViewReader { proxy in
                 List {
-                    Section { header(entry) }.listRowBackground(MidokuTheme.surface)
-                    if !state.description(entry).isEmpty {
-                        Section {
-                            Text(state.description(entry)).font(.callout).lineLimit(expanded ? nil : 3).textSelection(.enabled)
-                            Button(expanded ? "Show less" : "Read description") { expanded.toggle() }.font(.subheadline)
-                        }.listRowBackground(MidokuTheme.surface)
-                    }
+                    Section {
+                        VStack(alignment: .leading, spacing: 12) {
+                            header(entry)
+                            EntrySynopsis(text: state.description(entry))
+                        }.padding(.top, 4).padding(.bottom, 4)
+                    }.listRowBackground(MidokuTheme.background).listRowSeparator(.hidden)
                     if let error = entry.links.compactMap({ state.listing($0.listingID)?.lastError }).first {
                         Section { Label(error, systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(MidokuTheme.secondaryText) }.listRowBackground(MidokuTheme.surface)
                     }
@@ -57,7 +55,10 @@ struct LibraryEntryView: View {
                             if !state.clipboard.isEmpty {
                                 Button { pasting = true } label: { Label("Paste chapters", systemImage: "doc.on.clipboard").labelStyle(.iconOnly) }.buttonStyle(MidokuIconButtonStyle())
                             }
-                            Button(selecting ? "Done" : "Select") { selecting.toggle(); selected.removeAll() }.buttonStyle(.borderless)
+                            Button { selecting.toggle(); selected.removeAll() } label: {
+                                Label(selecting ? "Finish selection" : "Select chapters", systemImage: selecting ? "checkmark" : "checkmark.circle")
+                                    .labelStyle(.iconOnly)
+                            }.buttonStyle(MidokuIconButtonStyle())
                         }.id("chapter-header")
                         if entry.slots.isEmpty {
                             VStack(alignment: .leading, spacing: 12) {
@@ -73,8 +74,8 @@ struct LibraryEntryView: View {
                             }
                         } else { ForEach(visibleSlots(entry)) { slot in chapterRow(slot, entry: entry) } }
                         if !entry.slots.isEmpty && visibleSlots(entry).isEmpty { Text("No chapters match these filters.").foregroundStyle(MidokuTheme.secondaryText) }
-                    }.listRowBackground(MidokuTheme.surface)
-                }.settingsStyle().refreshable { await library.refresh(entryIDs: [entryID]) }
+                    }.listRowBackground(MidokuTheme.background)
+                }.modifier(EntryListStyle()).refreshable { await library.refresh(entryIDs: [entryID]) }
                 #if DEBUG
                 .task {
                     if ["--chapters-preview", "--chapter-grid-preview", "--chapter-compact-preview", "--chapter-thumbnail-preview", "--empty-clipboard-preview"].contains(where: CommandLine.arguments.contains) {
@@ -130,25 +131,19 @@ struct LibraryEntryView: View {
     }
 
     private func header(_ entry: PersonalEntry) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 16) {
-                LibraryCoverView(entry: entry, extensions: extensions).frame(width: 96, height: 138).clipped().clipShape(RoundedRectangle(cornerRadius: 10))
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(state.title(entry)).font(.title3.bold()).textSelection(.enabled)
-                    let metadata = state.listing(entry.primaryListingID)?.details
-                    if let authors = entry.authorOverride ?? metadata?.authors?.joined(separator: ", "), !authors.isEmpty { Text(authors).font(.caption).foregroundStyle(MidokuTheme.secondaryText) }
-                    Text([entry.status.title, metadata?.status?.capitalized].compactMap { $0 }.joined(separator: " · ")).font(.caption)
-                    Text("\(entry.slots.filter { !state.isRead($0) }.count) unread").font(.subheadline.weight(.medium)).foregroundStyle(.tint)
-                    let categories = settings.snapshot.categories.filter { entry.categoryIDs.contains($0.id) }.map(\.name)
-                    if !categories.isEmpty { Text(categories.joined(separator: " · ")).font(.caption).foregroundStyle(MidokuTheme.secondaryText) }
-                }.frame(maxWidth: .infinity, alignment: .leading)
-            }
+        let metadata = state.listing(entry.primaryListingID)?.details
+        let categories = settings.snapshot.categories.filter { entry.categoryIDs.contains($0.id) }.map(\.name)
+        return EntryOverview(title: state.title(entry), author: entry.authorOverride ?? metadata?.authors?.joined(separator: ", "),
+            metadata: ([entry.status.title, metadata?.status?.capitalized].compactMap { $0 } + categories).joined(separator: " · "),
+            detail: "\(entry.slots.filter { !state.isRead($0) }.count) unread") {
+                LibraryCoverView(entry: entry, extensions: extensions)
+            } action: {
             if let slot = state.resumeSlot(entry, positions: settings.snapshot.progress) {
-                NavigationLink { LibraryReaderView(entryID: entryID, initialSlotID: slot, extensions: extensions) } label: {
-                    Label(entry.lastReadAt == nil ? "Start reading" : "Continue reading", systemImage: "book.pages").frame(maxWidth: .infinity)
-                }.buttonStyle(MidokuPrimaryButtonStyle())
+                Button { readingSlot = slot } label: {
+                    Label(entry.lastReadAt == nil ? "Start reading" : "Continue reading", systemImage: "play.fill")
+                }
             }
-        }.padding(.vertical, 4)
+        }
     }
 
     private func visibleSlots(_ entry: PersonalEntry) -> [ChapterSlot] {

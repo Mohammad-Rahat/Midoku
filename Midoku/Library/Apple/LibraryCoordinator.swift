@@ -40,11 +40,13 @@ final class LibraryCoordinator {
 
     /// Save the already-visible listing immediately. A full refresh fills remaining chapters;
     /// partial pages must never mark previously remembered releases as unavailable.
-    func addVisible(details: MangaDetails, connection: SourceConnection, records: [ChapterRecord], language: String?) async throws -> UUID {
+    func addVisible(details: MangaDetails, connection: SourceConnection, records: [ChapterRecord], language: String?,
+                    options: LibraryAddOptions = LibraryAddOptions()) async throws -> UUID {
         var entryID: UUID?
         try await settings.commit { state in
             entryID = try state.library.add(details: details, connectionID: connection.id, records: records,
-                language: language, complete: false)
+                language: language, categories: options.categoryIDs.intersection(state.categories.map(\.id)), complete: false,
+                status: options.status, followsNewChapters: options.followsNewChapters)
         }
         guard let entryID else { throw LibraryFailure.missing }
         return entryID
@@ -77,7 +79,8 @@ final class LibraryCoordinator {
         for query in queries {
             guard !Task.isCancelled, generation == settings.restoreGeneration else { return }
             guard let listing = settings.snapshot.library.listing(query.listingID) else { continue }
-            if automatic, let date = listing.refreshedAt, Date().timeIntervalSince(date) < 900 { continue }
+            let pendingImport = entries.contains { $0.links.contains { $0.listingID == query.listingID && $0.language == query.language && $0.needsInitialImport == true } }
+            if automatic, !pendingImport, let date = listing.refreshedAt, Date().timeIntervalSince(date) < 900 { continue }
             do {
                 guard let connection = extensions.connections.first(where: { $0.id == listing.identity.connectionID }) else { throw LibraryFailure.missing }
                 let adapter = try await extensions.adapter(for: connection, interaction: automatic ? .background : .foreground)

@@ -99,6 +99,11 @@ struct HomeSectionsSettingsView: View {
     @State private var deleting: HomeSection?
     var body: some View {
         List {
+            Section("Personal sections") {
+                Toggle("Library updates", isOn: Binding(
+                    get: { settings.snapshot.preferences.homeUpdatesVisible },
+                    set: { value in settings.update { $0.preferences.showHomeUpdates = value } }))
+            }.listRowBackground(MidokuTheme.surface)
             if settings.snapshot.homeSections.isEmpty {
                 ContentUnavailableView("Your Home, in your order", systemImage: "pin",
                     description: Text("Open a source in Browse, choose a feed or search, then use Pin to Home. Your filters are saved with the section."))

@@ -1,3 +1,13 @@
+# Native tabs, compact entries and library choices — 2026-09-19
+
+- Restored SwiftUI native Liquid Glass tabs with independent navigation stacks and system safe-area handling. Removed the custom tab strip and its visibility preference; reader routes hide native tabs through the toolbar API.
+- Home's top-right management screen includes a Library updates toggle. It hides only the section, retaining update records and library refresh behavior. Existing settings default to visible.
+- Library uses a smaller search field and horizontally scrollable, underlined category tabs with the existing swipe pager. Add and More are the only header actions. More holds icon-labelled selection, sort, filters, layout/settings, clipboard and refresh. Search still submits on Return.
+- Custom glass actions and selection indicators use the chosen accent. Settings and native navigation explicitly observe tint updates; forest-green selection badges are removed. Simulator checks include slate/light and ochre/dark variants.
+- Personal and source entries share a compact cover/title/metadata header and two-line expandable synopsis, with plain chapter sections replacing padded grouped cards. Full titles wrap, reading lives beside the cover, and source metadata remains available in Details. Chapter selection uses an icon; long-press actions and all three chapter-grid styles are retained.
+- Add to library now opens a cancellable sheet for categories, reading status and following new chapters. Confirmation saves choices with the initial visible chapters in one transaction. A persisted initial-import flag completes the remaining catalogue even when following is off, preserves exclusions and suppresses initial-import update notifications. Duplicate adds preserve existing choices.
+- Added regression checks for add-choice persistence, pending initial imports, follow-off behavior, exclusions, duplicate adds, Home visibility migration and accent backup persistence. Local extension verification passes all 21 tests; native tests, archive and focused simulator captures run in the IPA workflow. Device navigation and LiveContainer behavior still require user testing.
+
 # Home design, library paging and cover fixes — 2026-09-19
 
 - Replaced the system floating tab bar with a solid full-width five-tab bar. Each tab retains navigation state; reader routes hide the bar.

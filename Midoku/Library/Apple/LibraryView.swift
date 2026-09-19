@@ -11,6 +11,7 @@ struct LibraryView: View {
     @Environment(\.gridLandscape) private var gridLandscape
     @State private var query = ""
     @State private var submittedQuery = ""
+    @FocusState private var searching: Bool
     @State private var category = "all"
     @State private var status: PersonalStatus?
     @State private var unreadOnly = false
@@ -51,24 +52,20 @@ struct LibraryView: View {
         GeometryReader { geometry in
         VStack(spacing: 0) {
             if !state.entries.isEmpty {
-                HStack {
-                    Image(systemName: "magnifyingglass").foregroundStyle(MidokuTheme.secondaryText)
-                    TextField("Search your library", text: $query).textInputAutocapitalization(.never).autocorrectionDisabled()
-                        .submitLabel(.search).onSubmit { submittedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines) }
-                    if !query.isEmpty { Button { query = ""; submittedQuery = "" } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Clear search") }
-                    filterMenu
-                }.padding(12).background(MidokuTheme.surface, in: RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 16).padding(.vertical, 8)
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass").font(.system(size: 17)).foregroundStyle(MidokuTheme.secondaryText)
+                    TextField("Search library", text: $query).textFieldStyle(.plain)
+                        .font(.body).textInputAutocapitalization(.never).autocorrectionDisabled().focused($searching)
+                        .submitLabel(.search).onSubmit { submittedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines); searching = false }
+                    if !query.isEmpty {
+                        Button { query = ""; submittedQuery = "" } label: {
+                            Image(systemName: "xmark.circle.fill").foregroundStyle(MidokuTheme.secondaryText)
+                        }.buttonStyle(.plain).accessibilityLabel("Clear search")
+                    }
+                }.padding(.horizontal, 12).frame(minHeight: 42)
+                    .background(MidokuTheme.elevated, in: RoundedRectangle(cornerRadius: 10))
+                    .padding(.horizontal, 20).padding(.top, 2).padding(.bottom, 8)
                 categoryTabs
-                HStack {
-                    Menu {
-                        Picker("Sort", selection: settings.binding(\.librarySort)) {
-                            ForEach(LibrarySort.allCases) { Text($0.title).tag($0) }
-                        }
-                    } label: { Label(settings.snapshot.preferences.librarySort.title, systemImage: "chevron.down").font(.caption) }
-                    Spacer()
-                    NavigationLink { LibrarySettingsView() } label: { Image(systemName: "slider.horizontal.3").font(.system(size: 20)).frame(width: 44, height: 44) }
-                        .accessibilityLabel("Library layout and settings")
-                }.foregroundStyle(MidokuTheme.secondaryText).padding(.horizontal, 16)
             }
             if state.entries.isEmpty {
                 MidokuEmptyStateView(kind: .library, action: browse)
@@ -84,16 +81,24 @@ struct LibraryView: View {
         }
         }
         .mainScreenHeader(selecting ? "\(selected.count) selected" : "Library") {
-            HStack(spacing: 16) {
-                Button(selecting ? "Done" : "Select") { selecting.toggle(); selected.removeAll() }.font(.subheadline).buttonStyle(.plain).frame(minHeight: 44).disabled(state.entries.isEmpty)
+            HStack(spacing: 8) {
                 Menu {
                     Button("New empty entry", systemImage: "plus") { creating = true }
                     Button("Find manga", systemImage: "magnifyingglass", action: browse)
+                } label: { Label("Add entry", systemImage: "plus") }
+                Menu {
+                    Button(selecting ? "Finish selection" : "Select entries", systemImage: selecting ? "checkmark" : "checkmark.circle") {
+                        selecting.toggle(); selected.removeAll()
+                    }.disabled(state.entries.isEmpty)
+                    Menu {
+                        Picker("Sort", selection: settings.binding(\.librarySort)) { ForEach(LibrarySort.allCases) { Text($0.title).tag($0) } }
+                    } label: { Label("Sort", systemImage: "arrow.up.arrow.down") }
+                    filterMenu
+                    Toggle("List layout", systemImage: "list.bullet", isOn: $listLayout)
+                    NavigationLink { LibrarySettingsView() } label: { Label("Library settings", systemImage: "slider.horizontal.3") }
                     if !state.clipboard.isEmpty { NavigationLink { ClipboardView() } label: { Label("Clipboard (\(state.clipboard.count))", systemImage: "doc.on.clipboard") } }
                     Button("Refresh library", systemImage: "arrow.clockwise") { Task { await library.refresh() } }.disabled(library.refreshing)
-                    Toggle("List layout", isOn: $listLayout)
-                    Picker("Sort", selection: settings.binding(\.librarySort)) { ForEach(LibrarySort.allCases) { Text($0.title).tag($0) } }
-                } label: { Image(systemName: "plus").accessibilityLabel("Library actions") }
+                } label: { Label("More library options", systemImage: "ellipsis") }
             }
         }
         .safeAreaInset(edge: .bottom) {
@@ -124,19 +129,22 @@ struct LibraryView: View {
     private var categoryTabs: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal) {
-                HStack(spacing: 8) {
+                HStack(spacing: 4) {
                     ForEach(categoryIDs, id: \.self) { id in
                         Button { category = id } label: {
                             Text(categoryTitle(id)).font(.subheadline.weight(category == id ? .semibold : .regular))
-                                .padding(.horizontal, 16).padding(.vertical, 9)
-                                .foregroundStyle(category == id ? MidokuTheme.onAccent : MidokuTheme.secondaryText)
-                                .background(category == id ? settings.snapshot.preferences.accent.fill : MidokuTheme.elevated, in: Capsule())
-                                .frame(minHeight: 44)
+                                .padding(.horizontal, 16).frame(minHeight: 44)
+                                .foregroundStyle(category == id ? settings.snapshot.preferences.accent.color : MidokuTheme.secondaryText)
+                                .overlay(alignment: .bottom) {
+                                    Capsule().fill(settings.snapshot.preferences.accent.color).frame(height: 3)
+                                        .opacity(category == id ? 1 : 0)
+                                }
                         }.buttonStyle(.plain).id(id)
                             .accessibilityAddTraits(category == id ? .isSelected : [])
                     }
-                }.padding(.horizontal, 16)
+                }.padding(.horizontal, 4)
             }.scrollIndicators(.hidden)
+                .overlay(alignment: .bottom) { Rectangle().fill(MidokuTheme.border).frame(height: 0.5) }
                 .onChange(of: category) { proxy.scrollTo(category, anchor: .center) }
         }
     }
@@ -163,7 +171,7 @@ struct LibraryView: View {
                     ForEach(entries) { entry in entryLink(entry, compact: false, width: cellWidth) }
                 }.padding(16)
             }
-        }.refreshable { await library.refresh() }
+        }.scrollDismissesKeyboard(.interactively).refreshable { await library.refresh() }
     }
 
     private var filterMenu: some View {
@@ -173,7 +181,7 @@ struct LibraryView: View {
             Picker("Reading status", selection: $status) { Text("Any status").tag(PersonalStatus?.none); ForEach(PersonalStatus.allCases) { Text($0.title).tag(Optional($0)) } }
             Picker("Source", selection: $sourceID) { Text("All sources").tag(UUID?.none); ForEach(settings.snapshot.connections) { Text($0.name).tag(Optional($0.id)) } }
             Picker("Publication", selection: $publication) { Text("Any publication").tag("all"); ForEach(["ongoing", "completed", "hiatus", "cancelled"], id: \.self) { Text($0.capitalized).tag($0) } }
-        } label: { Image(systemName: "line.3.horizontal.decrease").font(.system(size: 20)).frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("Filter library")
+        } label: { Label("Filter", systemImage: "line.3.horizontal.decrease") }
     }
     @ViewBuilder private func entryLink(_ entry: PersonalEntry, compact: Bool, width: CGFloat? = nil) -> some View {
         if selecting {
@@ -190,7 +198,7 @@ struct LibraryView: View {
                 .frame(width: compact ? 64 : width, height: compact ? 96 : (width ?? 140) * 1.5)
                 .clipped().clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(alignment: .topTrailing) {
-                    if selecting { Image(systemName: selected.contains(entry.id) ? "checkmark.circle.fill" : "circle").font(.title2).foregroundStyle(.white, .green).padding(6) }
+                    if selecting { Image(systemName: selected.contains(entry.id) ? "checkmark.circle.fill" : "circle").font(.title2).foregroundStyle(.white, settings.snapshot.preferences.accent.fill).padding(6) }
                 }
             VStack(alignment: .leading, spacing: 5) {
                 Text(state.title(entry)).font(.subheadline.weight(.semibold)).lineLimit(compact ? 3 : 2).foregroundStyle(MidokuTheme.primaryText)

@@ -97,6 +97,8 @@ nonisolated struct AppPreferences: Codable, Equatable, Sendable {
     var launchTab: LaunchTab = .home
     var librarySort: LibrarySort = .recentlyAdded
     var refreshOnLaunch = true
+    var showHomeUpdates: Bool? = nil
+    var homeUpdatesVisible: Bool { showHomeUpdates ?? true }
     var chapterThumbnails = true
     var chapterLayout: ChapterLayoutPreferences? = nil
     var resolvedChapterLayout: ChapterLayoutPreferences { chapterLayout ?? ChapterLayoutPreferences() }

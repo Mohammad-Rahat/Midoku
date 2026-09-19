@@ -29,8 +29,10 @@ extension View {
 
 /// Keep the native back button so navigation retains iOS interactive swipe-back.
 struct NativeNavigationBar: ViewModifier {
+    @Environment(AppSettingsStore.self) private var settings
     func body(content: Content) -> some View {
         content
+            .tint(settings.snapshot.preferences.accent.color)
             .toolbar(.visible, for: .navigationBar)
             .toolbarBackground(MidokuTheme.background, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
@@ -41,6 +43,7 @@ struct MidokuIconButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 20, weight: .regular))
+            .foregroundStyle(.tint)
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Circle())
             .glassEffect(.regular.interactive(), in: .circle)

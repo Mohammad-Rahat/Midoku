@@ -105,7 +105,7 @@ struct ReaderCoverActions: View {
 struct ReaderBackGesture: ViewModifier {
     @Environment(\.dismiss) private var dismiss
     func body(content: Content) -> some View {
-        content.preference(key: AppTabBarHiddenPreference.self, value: true).overlay(alignment: .leading) {
+        content.toolbar(.hidden, for: .tabBar).overlay(alignment: .leading) {
             Color.clear.frame(width: 22).contentShape(Rectangle())
                 .gesture(DragGesture(minimumDistance: 18).onEnded { value in
                     guard value.translation.width > 65, value.translation.width > abs(value.translation.height) * 1.5 else { return }

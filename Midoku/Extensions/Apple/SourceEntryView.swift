@@ -9,7 +9,8 @@ struct SourceEntryView: View {
     @Environment(LibraryCoordinator.self) private var library
     @Environment(\.gridLandscape) private var landscape
     @Environment(\.dynamicTypeSize) private var textSize
-    @State private var adding = false
+    @State private var showingAdd = false
+    @State private var showingMetadata = false
     @State private var selecting = false
     @State private var showingClipboard = false
     @State private var readingChapter: ChapterRecord?
@@ -57,17 +58,23 @@ struct SourceEntryView: View {
     var body: some View {
         List {
             Section {
-                SourceEntryHeader(summary: summary, details: details, adapter: adapter, extensions: extensions)
-                    .listRowInsets(EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16))
+                VStack(alignment: .leading, spacing: 12) {
+                    SourceEntryHeader(summary: summary, details: details, adapter: adapter, extensions: extensions)
+                    if let details { EntrySynopsis(text: details.description) }
+                    if details != nil {
+                        Button { showingMetadata = true } label: { Label("Details", systemImage: "info.circle").font(.caption) }
+                            .buttonStyle(.plain).foregroundStyle(.tint)
+                    }
+                }.padding(.top, 4).padding(.bottom, 4)
             }
-            .listRowBackground(MidokuTheme.surface)
+            .listRowBackground(MidokuTheme.background).listRowSeparator(.hidden)
             if let detailError {
                 SourceErrorView(message: detailError) { detailRetry += 1 }
                     .listRowBackground(MidokuTheme.surface)
             } else if details == nil {
                 ProgressView("Loading entry").listRowBackground(MidokuTheme.surface)
             }
-            if let details {
+            if details != nil, !existingEntries.isEmpty || actionMessage != nil {
                 Section {
                     ForEach(existingEntries) { entry in
                         NavigationLink { LibraryEntryView(entryID: entry.id, extensions: extensions) } label: {
@@ -75,26 +82,7 @@ struct SourceEntryView: View {
                         }
                     }
                     if let actionMessage { Text(actionMessage).font(.caption).foregroundStyle(MidokuTheme.secondaryText) }
-                }.listRowBackground(MidokuTheme.surface)
-                Section("About") {
-                    SourceDescriptionView(text: details.description)
-                    if let authors = details.authors, !authors.isEmpty {
-                        LabeledContent("Author", value: authors.formatted(.list(type: .and)))
-                    }
-                    if let artists = details.artists, !artists.isEmpty, artists != details.authors {
-                        LabeledContent("Artist", value: artists.formatted(.list(type: .and)))
-                    }
-                    if let status = details.status { LabeledContent("Status", value: status.capitalized) }
-                    if let year = details.year { LabeledContent("Year", value: year) }
-                    if let tags = details.tags, !tags.isEmpty {
-                        Text(tags.formatted(.list(type: .and)))
-                            .font(.footnote).foregroundStyle(MidokuTheme.secondaryText)
-                    }
-                    if let url = details.webURL {
-                        InAppBrowserLink(url: url, title: "View on \(adapter.connection.name)")
-                    }
-                }
-                .listRowBackground(MidokuTheme.surface)
+                }.listRowBackground(MidokuTheme.background)
             }
             if adapter.manifest.capabilities.contains(.chapters) {
                 Section {
@@ -105,7 +93,9 @@ struct SourceEntryView: View {
                             }.labelsHidden().accessibilityLabel("Chapter language")
                         } else { Text(chapterLanguage.isEmpty ? "Chapters" : chapterLanguage.uppercased()).font(.subheadline) }
                         Spacer(minLength: 0)
-                        Button(selecting ? "Done" : "Select") { selecting.toggle(); selected.removeAll() }.buttonStyle(.borderless)
+                        Button { selecting.toggle(); selected.removeAll() } label: {
+                            Label(selecting ? "Finish selection" : "Select chapters", systemImage: selecting ? "checkmark" : "checkmark.circle").labelStyle(.iconOnly)
+                        }.buttonStyle(MidokuIconButtonStyle())
                         if !settings.snapshot.library.clipboard.isEmpty {
                             Button { showingClipboard = true } label: {
                                 Label("Chapter clipboard", systemImage: "doc.on.clipboard").labelStyle(.iconOnly)
@@ -138,14 +128,17 @@ struct SourceEntryView: View {
                         Text("No readable chapters in this language.")
                             .foregroundStyle(MidokuTheme.secondaryText)
                     }
-                } header: {
-                    Text("Chapters")
-                }
-                .listRowBackground(MidokuTheme.surface)
+                }.listRowBackground(MidokuTheme.background)
             }
         }
-        .scrollContentBackground(.hidden).background(MidokuTheme.background)
-        .modifier(NativeNavigationBar())
+        .modifier(EntryListStyle())
+        .sheet(isPresented: $showingAdd) {
+            if let details {
+                AddToLibrarySheet(title: details.title, source: adapter.connection.name,
+                    language: chapterLanguage.isEmpty ? nil : chapterLanguage, save: addToLibrary)
+            }
+        }
+        .sheet(isPresented: $showingMetadata) { metadataSheet }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if let existing = existingEntries.first {
@@ -153,10 +146,9 @@ struct SourceEntryView: View {
                         Label("In library", systemImage: "checkmark").labelStyle(.titleAndIcon)
                     }
                 } else {
-                    Button { addToLibrary() } label: {
-                        if adding { ProgressView() }
-                        else { Label("Add to library", systemImage: "plus").labelStyle(.titleAndIcon) }
-                    }.disabled(details == nil || adding)
+                    Button { showingAdd = true } label: {
+                        Label("Add to library", systemImage: "plus").labelStyle(.iconOnly)
+                    }.disabled(details == nil)
                 }
             }
         }
@@ -175,6 +167,11 @@ struct SourceEntryView: View {
         }
         .navigationTitle("Entry")
         .navigationBarTitleDisplayMode(.inline)
+        #if DEBUG
+        .onChange(of: loadedDetailRevision) {
+            if CommandLine.arguments.contains("--add-entry-preview"), loadedDetailRevision != nil { showingAdd = true }
+        }
+        #endif
         .task(id: detailRetry) {
             guard loadedDetailRevision != detailRetry else { return }
             do {
@@ -269,19 +266,35 @@ struct SourceEntryView: View {
             }
     }
 
-    private func addToLibrary() {
-        guard let details, !adding else { return }
-        adding = true; actionMessage = nil
+    private func addToLibrary(_ options: LibraryAddOptions) async throws {
+        guard let details else { throw LibraryFailure.missing }
         let records = chapters.isStale || loadedChapterQuery?.language != chapterLanguage ? [] : chapters.items
         let language = chapterLanguage.isEmpty ? nil : chapterLanguage
+        let id = try await library.addVisible(details: details, connection: adapter.connection,
+            records: records, language: language, options: options)
+        actionMessage = nil
         Task {
-            do {
-                let id = try await library.addVisible(details: details, connection: adapter.connection, records: records, language: language)
-                adding = false
-                actionMessage = nil
-                await library.refresh(entryIDs: [id])
-                actionMessage = library.refreshMessage
-            } catch { adding = false; actionMessage = error.localizedDescription }
+            await library.refresh(entryIDs: [id])
+            actionMessage = library.refreshMessage
+        }
+    }
+
+    private var metadataSheet: some View {
+        NavigationStack {
+            List {
+                if let details {
+                    Section {
+                        Text(details.title).font(.headline)
+                        if let authors = details.authors, !authors.isEmpty { LabeledContent("Author", value: authors.joined(separator: ", ")) }
+                        if let artists = details.artists, !artists.isEmpty, artists != details.authors { LabeledContent("Artist", value: artists.joined(separator: ", ")) }
+                        if let status = details.status { LabeledContent("Status", value: status.capitalized) }
+                        if let year = details.year { LabeledContent("Year", value: year) }
+                        if let tags = details.tags, !tags.isEmpty { Text(tags.joined(separator: " · ")).font(.subheadline) }
+                        if let url = details.webURL { InAppBrowserLink(url: url, title: "View on \(adapter.connection.name)") }
+                    }.listRowBackground(MidokuTheme.surface)
+                }
+            }.settingsStyle().navigationTitle("Details")
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingMetadata = false } } }
         }
     }
     private func copy(_ records: [ChapterRecord]) {
@@ -306,43 +319,13 @@ private struct SourceEntryHeader: View {
     let details: MangaDetails?
     let adapter: any SourceAdapter
     let extensions: ExtensionEnvironment
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        let layout = dynamicTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 16))
-            : AnyLayout(HStackLayout(alignment: .top, spacing: 16))
-        layout {
+        EntryOverview(title: details?.title ?? summary.title, author: details?.authors?.joined(separator: ", "),
+            metadata: [adapter.connection.name, details?.status?.capitalized, details?.year].compactMap { $0 }.joined(separator: " · "),
+            detail: nil) {
             SourceCoverView(url: details?.coverURL ?? summary.coverURL, adapter: adapter, extensions: extensions)
-                .frame(width: 110, height: 165).clipShape(RoundedRectangle(cornerRadius: 10))
-            VStack(alignment: .leading, spacing: 10) {
-                Text(details?.title ?? summary.title).font(.title2.bold()).textSelection(.enabled)
-                Label(adapter.connection.name, systemImage: "globe")
-                    .font(.subheadline).foregroundStyle(MidokuTheme.secondaryText)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-}
-
-private struct SourceDescriptionView: View {
-    let text: String
-    @State private var expanded = false
-    @State private var attributed = AttributedString()
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if text.isEmpty {
-                Text("No description available.").foregroundStyle(MidokuTheme.secondaryText)
-            } else {
-                Text(attributed).lineLimit(expanded ? nil : 5).textSelection(.enabled)
-                Button(expanded ? "Show less" : "Read description") { expanded.toggle() }
-                    .font(.subheadline).frame(minHeight: 44)
-            }
-        }
-        .task(id: text) {
-            attributed = (try? AttributedString(markdown: text,
-                options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
-        }
+        } action: { EmptyView() }
     }
 }
 
