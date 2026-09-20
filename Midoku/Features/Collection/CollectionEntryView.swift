@@ -15,7 +15,9 @@ struct MCEntryView: View {
     @State private var showReorder = false
     @State private var confirmRemove = false
     @State private var confirmReset = false
+    @State private var confirmResetThumbnails = false
     @State private var confirmRemoveChapters = false
+    @State private var thumbnailRevision = 0
     @AppStorage("Midoku.chapterGrid") private var defaultChapterGrid = false
     @AppStorage("Appearance.chapterGridStyle") private var gridStyle = ChapterGridStyle.standard
     @AppStorage("Appearance.chapterPortraitColumns") private var portraitColumns = 3
@@ -74,6 +76,8 @@ struct MCEntryView: View {
                                 Text("Grid").tag(Bool?.some(true))
                                 Text("List").tag(Bool?.some(false))
                             }
+                            Button("Reset chapter thumbnails", systemImage: "arrow.counterclockwise") { confirmResetThumbnails = true }
+                                .disabled(entry.slots.isEmpty)
                             Button("Reorder chapters", systemImage: "line.3.horizontal") { selecting = false; showReorder = true }
                             if entry.manualOrder {
                                 Button("Restore chapter-number order") { store.perform { try $0.library.editEntry(entryID) { $0.manualOrder = false } } }
@@ -97,6 +101,9 @@ struct MCEntryView: View {
         .confirmationDialog("Reset entry edits?", isPresented: $confirmReset) {
             Button("Reset edits", role: .destructive) { store.perform { try $0.library.resetDetails(entryID) } }
         } message: { Text("Resets the entry’s title, description, author and cover. Chapters, categories and reading progress are kept.") }
+        .confirmationDialog("Reset all chapter thumbnails?", isPresented: $confirmResetThumbnails) {
+            Button("Reset thumbnails", role: .destructive) { resetChapterThumbnails() }
+        } message: { Text("Custom and generated thumbnails for this entry will be cleared. Chapter details and reading progress are kept.") }
         .confirmationDialog("Reset chapter edits?", isPresented: Binding(get: { resettingChapter != nil }, set: { if !$0 { resettingChapter = nil } }), presenting: resettingChapter) { item in
             Button("Reset edits", role: .destructive) { store.perform { try $0.library.resetChapterDetails(entryID: entryID, slotID: item.id) } }
         } message: { _ in Text("Restores the source title, number, volume and thumbnail.") }
@@ -245,6 +252,7 @@ struct MCEntryView: View {
         if grid {
             VStack(alignment: .leading, spacing: 6) {
                 MCChapterThumbnail(variant: slot.preferred).aspectRatio(2/3, contentMode: .fit)
+                    .id("\(slot.preferredID.uuidString)-\(thumbnailRevision)")
                     .overlay(alignment: .bottomLeading) {
                         if gridStyle == .compact, let variant = slot.preferred {
                             Text(store.library.chapterDisplayTitle(variant)).font(.caption.weight(.semibold)).lineLimit(1)
@@ -270,6 +278,7 @@ struct MCEntryView: View {
                     MCChapterListArtwork(entry: entry, variant: slot.preferred)
                         .frame(width: 48, height: 72)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .id("\(slot.preferredID.uuidString)-\(thumbnailRevision)")
                 }
                 chapterText(slot, compact: false)
                 Spacer(minLength: 0)
@@ -312,6 +321,14 @@ struct MCEntryView: View {
     private func open(_ slot: MCChapterSlot) {
         do { reader = MCReaderSheet(sequence: try MCReaderSequence(entryID: entryID, slotID: slot.id)) }
         catch { store.error = error.localizedDescription }
+    }
+    private func resetChapterThumbnails() {
+        guard let entry else { return }
+        let chapterIDs = Set(entry.slots.flatMap(\.variants).map(\.chapterID))
+        if store.perform({ try $0.library.resetChapterThumbnails(entryID: entryID) }) {
+            MCThumbnailCache.shared.reset(chapterIDs: chapterIDs)
+            thumbnailRevision += 1
+        }
     }
     private func copy(_ value: String) {
         UIPasteboard.general.string = value

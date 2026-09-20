@@ -26,6 +26,15 @@ final class MCThumbnailCache {
         return image
     }
 
+    func reset(chapterIDs: Set<UUID>) {
+        for chapterID in chapterIDs {
+            tasks[chapterID]?.cancel()
+            tasks[chapterID] = nil
+            cache.removeObject(forKey: chapterID.uuidString as NSString)
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent(chapterID.uuidString + ".jpg"))
+        }
+    }
+
     func image(chapter: MCLibraryChapter, store: MCCollectionStore) async -> UIImage? {
         if let cached = cachedImage(chapterID: chapter.id) { return cached }
         let key = chapter.id.uuidString as NSString

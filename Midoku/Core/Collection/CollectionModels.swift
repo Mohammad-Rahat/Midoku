@@ -205,6 +205,19 @@ nonisolated struct MCLibraryState: Codable, Sendable {
         }
     }
 
+    /// Clears chapter artwork overrides for one entry without changing any other chapter edits.
+    mutating func resetChapterThumbnails(entryID: UUID) throws {
+        try editEntry(entryID) { entry in
+            for slot in entry.slots.indices {
+                for variant in entry.slots[slot].variants.indices {
+                    entry.slots[slot].variants[variant].edits.coverID = nil
+                }
+            }
+        }
+        let usedCoverIDs = Set(entries.compactMap(\.coverID) + entries.flatMap(\.slots).flatMap(\.variants).compactMap(\.edits.coverID))
+        covers.removeAll { !usedCoverIDs.contains($0.id) }
+    }
+
     @discardableResult
     mutating func createManual(title: String, description: String = "", categories: Set<UUID> = []) throws -> UUID {
         let title = title.trimmingCharacters(in: .whitespacesAndNewlines)

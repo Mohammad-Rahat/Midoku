@@ -35,10 +35,10 @@ private enum MCLibraryProgressFilter: String, CaseIterable, Identifiable {
     }
 }
 
-private struct MCLibraryEntrySection: Identifiable {
+private struct MCLibraryGroupPage: Identifiable {
     let id: String
     let title: String
-    let entries: [MCPersonalEntry]
+    let entryIDs: Set<UUID>
 }
 
 private struct MCLibrarySourceOption: Identifiable, Equatable {
@@ -50,12 +50,12 @@ struct MCCollectionRootView: View {
     @State private var store = MCCollectionStore.shared
     @State private var path: [UUID] = []
     @State private var query = ""
-    @State private var category: UUID?
+    @State private var groupPage: String?
     @State private var statuses = Set<MCPersonalStatus>()
     @State private var tags = Set<String>()
     @State private var sources = Set<UUID>()
     @State private var progressFilter = MCLibraryProgressFilter.all
-    @State private var grouping = MCLibraryGrouping.none
+    @AppStorage("Midoku.libraryGrouping") private var grouping = MCLibraryGrouping.category
     @State private var sort = MCLibrarySort.recentlyAdded
     @State private var showCreate = false
     @State private var showCategories = false
@@ -73,8 +73,11 @@ struct MCCollectionRootView: View {
     @AppStorage("Appearance.libraryPortraitColumns") private var portraitColumns = 3
     @AppStorage("Appearance.libraryLandscapeColumns") private var landscapeColumns = 5
 
-    private func entries(in category: UUID?) -> [MCPersonalEntry] {
-        store.library.entries.filter { entry in
+    private func entries(in groupPage: String?) -> [MCPersonalEntry] {
+        let groupEntryIDs = groupPage.flatMap { selected in
+            groupPages.first(where: { $0.id == selected })?.entryIDs
+        }
+        return store.library.entries.filter { entry in
             let details = store.library.listing(entry.primaryListingID)?.details
             let searchable = [
                 store.library.title(entry),
@@ -85,7 +88,7 @@ struct MCCollectionRootView: View {
             ].compactMap { $0 }.joined(separator: " ")
             let sourceIDs = entry.links.compactMap { store.library.listing($0.listingID)?.identity.connectionID }
             return (query.isEmpty || searchable.localizedCaseInsensitiveContains(query)) &&
-                (category.map { entry.categoryIDs.contains($0) } ?? true) &&
+                (groupPage == nil || groupEntryIDs?.contains(entry.id) == true) &&
                 (statuses.isEmpty || statuses.contains(entry.status)) &&
                 (tags.isEmpty || !tags.isDisjoint(with: Set(entryTags(entry)))) &&
                 (sources.isEmpty || !sources.isDisjoint(with: Set(sourceIDs))) &&
@@ -140,50 +143,90 @@ struct MCCollectionRootView: View {
         }
     }
 
-    private func sections(for entries: [MCPersonalEntry]) -> [MCLibraryEntrySection] {
-        guard grouping != .none else { return [.init(id: "all", title: "", entries: entries)] }
-        let grouped = Dictionary(grouping: entries) { groupTitle($0) }
-        let preferredOrder: [String] = switch grouping {
-        case .category: store.snapshot.categories.map(\.name) + ["Uncategorized"]
-        case .status: MCPersonalStatus.allCases.map(\.title)
-        default: []
-        }
-        return grouped.map { title, values in
-            .init(id: "\(grouping.rawValue)-\(title)", title: title, entries: values)
-        }.sorted { lhs, rhs in
-            let left = preferredOrder.firstIndex(of: lhs.title)
-            let right = preferredOrder.firstIndex(of: rhs.title)
-            if left != nil || right != nil { return (left ?? Int.max) < (right ?? Int.max) }
-            return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
+    private var groupPages: [MCLibraryGroupPage] {
+        switch grouping {
+        case .none:
+            []
+        case .category:
+            var pages = store.snapshot.categories.map { category in
+                MCLibraryGroupPage(
+                    id: "category:\(category.id.uuidString)",
+                    title: category.name,
+                    entryIDs: Set(store.library.entries.filter { $0.categoryIDs.contains(category.id) }.map(\.id))
+                )
+            }
+            let uncategorized = Set(store.library.entries.filter { $0.categoryIDs.isEmpty }.map(\.id))
+            if !uncategorized.isEmpty {
+                pages.append(.init(id: "category:uncategorized", title: "Uncategorized", entryIDs: uncategorized))
+            }
+            return pages
+        case .artist:
+            return namedGroupPages(prefix: "artist", emptyTitle: "Unknown artist") { entry in
+                store.library.listing(entry.primaryListingID)?.details.artists ?? []
+            }
+        case .author:
+            return namedGroupPages(prefix: "author", emptyTitle: "Unknown author") { entry in
+                if let override = entry.authorOverride, !override.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    [override]
+                } else {
+                    store.library.listing(entry.primaryListingID)?.details.authors ?? []
+                }
+            }
+        case .status:
+            return MCPersonalStatus.allCases.compactMap { status in
+                let ids = Set(store.library.entries.filter { $0.status == status }.map(\.id))
+                return ids.isEmpty ? nil : .init(id: "status:\(status.rawValue)", title: status.title, entryIDs: ids)
+            }
+        case .tag:
+            return namedGroupPages(prefix: "tag", emptyTitle: "Untagged", values: entryTags)
+        case .source:
+            var buckets: [UUID: Set<UUID>] = [:]
+            var unavailable = Set<UUID>()
+            for entry in store.library.entries {
+                let connectionIDs = Set(entry.links.compactMap { store.library.listing($0.listingID)?.identity.connectionID })
+                if connectionIDs.isEmpty { unavailable.insert(entry.id) }
+                for connectionID in connectionIDs { buckets[connectionID, default: []].insert(entry.id) }
+            }
+            var pages = buckets.map { connectionID, entryIDs in
+                .init(id: "source:\(connectionID.uuidString)", title: store.sourceName(connectionID), entryIDs: entryIDs)
+            }.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+            if !unavailable.isEmpty {
+                pages.append(.init(id: "source:unavailable", title: "Unavailable source", entryIDs: unavailable))
+            }
+            return pages
         }
     }
 
-    private func groupTitle(_ entry: MCPersonalEntry) -> String {
-        let details = store.library.listing(entry.primaryListingID)?.details
-        return switch grouping {
-        case .none: ""
-        case .category:
-            store.snapshot.categories.first { entry.categoryIDs.contains($0.id) }?.name ?? "Uncategorized"
-        case .artist: details?.artists?.first ?? "Unknown artist"
-        case .author: entry.authorOverride ?? details?.authors?.first ?? "Unknown author"
-        case .status: entry.status.title
-        case .tag: entryTags(entry).first ?? "Untagged"
-        case .source:
-            entry.primaryListingID.flatMap { store.library.listing($0) }.map { store.sourceName($0.identity.connectionID) }
-                ?? "Unavailable source"
+    private func namedGroupPages(
+        prefix: String,
+        emptyTitle: String,
+        values: (MCPersonalEntry) -> [String]
+    ) -> [MCLibraryGroupPage] {
+        var buckets: [String: (title: String, entryIDs: Set<UUID>)] = [:]
+        for entry in store.library.entries {
+            let names = values(entry).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+            for name in names.isEmpty ? [emptyTitle] : names {
+                let key = name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+                var bucket = buckets[key] ?? (name, [])
+                bucket.entryIDs.insert(entry.id)
+                buckets[key] = bucket
+            }
         }
+        return buckets.map { key, bucket in
+            .init(id: "\(prefix):\(key)", title: bucket.title, entryIDs: bucket.entryIDs)
+        }.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
     }
 
     var body: some View {
         NavigationStack(path: $path) {
             VStack(spacing: 0) {
-                if !store.snapshot.categories.isEmpty { categoryTabs }
+                if grouping != .none { groupTabs }
                 if selecting { selectionActions }
                 GeometryReader { geometry in
-                    TabView(selection: $category) {
-                        collectionPage(category: nil, size: geometry.size).tag(Optional<UUID>.none)
-                        ForEach(store.snapshot.categories) { item in
-                            collectionPage(category: item.id, size: geometry.size).tag(Optional(item.id))
+                    TabView(selection: $groupPage) {
+                        collectionPage(groupPage: nil, size: geometry.size).tag(Optional<String>.none)
+                        ForEach(groupPages) { page in
+                            collectionPage(groupPage: page.id, size: geometry.size).tag(Optional(page.id))
                         }
                     }
                     .tabViewStyle(.page(indexDisplayMode: .never))
@@ -237,8 +280,9 @@ struct MCCollectionRootView: View {
             .sheet(isPresented: $showImport) { MCImportCollectionView() }
             .mcErrors(store)
             .navigationDestination(for: UUID.self) { MCEntryView(entryID: $0) }
-            .onChange(of: store.snapshot.categories) { _, values in
-                if let category, !values.contains(where: { $0.id == category }) { self.category = nil }
+            .onChange(of: grouping) { _, _ in groupPage = nil }
+            .onChange(of: groupPages.map(\.id)) { _, values in
+                if let groupPage, !values.contains(groupPage) { self.groupPage = nil }
             }
             .onChange(of: availableTags) { _, values in tags.formIntersection(values) }
             .onChange(of: availableSources.map(\.id)) { _, values in sources.formIntersection(values) }
@@ -260,18 +304,18 @@ struct MCCollectionRootView: View {
         }.midokuAccent()
     }
 
-    private var categoryTabs: some View {
+    private var groupTabs: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 24) {
-                    categoryButton("All", count: store.library.entries.count, id: nil)
-                    ForEach(store.snapshot.categories) { item in
-                        categoryButton(item.name, count: store.library.entries.filter { $0.categoryIDs.contains(item.id) }.count, id: item.id)
+                    groupButton("All", count: store.library.entries.count, id: nil)
+                    ForEach(groupPages) { page in
+                        groupButton(page.title, count: page.entryIDs.count, id: page.id)
                     }
                 }.padding(.horizontal)
             }
-            .onChange(of: category) { _, value in
-                withAnimation { proxy.scrollTo(value?.uuidString ?? "all", anchor: .center) }
+            .onChange(of: groupPage) { _, value in
+                withAnimation { proxy.scrollTo(value ?? "all", anchor: .center) }
             }
         }.fixedSize(horizontal: false, vertical: true)
         .overlay(alignment: .bottom) { Divider() }
@@ -280,7 +324,7 @@ struct MCCollectionRootView: View {
     private var selectionActions: some View {
         HStack {
             Button(selected.isEmpty ? "Select all" : "Deselect all") {
-                if selected.isEmpty { selected = Set(entries(in: category).map(\.id)) } else { selected.removeAll() }
+                if selected.isEmpty { selected = Set(entries(in: groupPage).map(\.id)) } else { selected.removeAll() }
             }
             Spacer()
             Text("\(selected.count) selected").font(.subheadline).foregroundStyle(.secondary)
@@ -295,53 +339,42 @@ struct MCCollectionRootView: View {
         return Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: count)
     }
 
-    @ViewBuilder private func collectionPage(category: UUID?, size: CGSize) -> some View {
-        let values = entries(in: category)
+    @ViewBuilder private func collectionPage(groupPage: String?, size: CGSize) -> some View {
+        let values = entries(in: groupPage)
         if values.isEmpty {
             let libraryIsEmpty = store.library.entries.isEmpty
             UnavailableView(libraryIsEmpty ? "Library Empty" : "No matches", systemImage: "books.vertical.fill",
-                description: Text(libraryIsEmpty ? "Add a title from Browse, or create an entry." : "Try another search, category, or filter."))
+                description: Text(libraryIsEmpty ? "Add a title from Browse, or create an entry." : "Try another search, group, or filter."))
         } else {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 22) {
-                    ForEach(sections(for: values)) { section in
-                        if grouping != .none {
-                            HStack(spacing: 8) {
-                                Text(section.title).font(.headline)
-                                Text("\(section.entries.count)")
-                                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                                    .padding(.horizontal, 7).padding(.vertical, 3)
-                                    .background(Color(uiColor: .secondarySystemFill), in: Capsule())
-                                Spacer()
-                            }
-                            .padding(.horizontal)
-                        }
-                        LazyVGrid(columns: columns(for: size), alignment: .leading, spacing: grid ? 20 : 14) {
-                            ForEach(section.entries) { entry in entryButton(entry) }
-                        }.padding(.horizontal)
+                LazyVGrid(columns: columns(for: size), alignment: .leading, spacing: grid ? 20 : 14) {
+                    ForEach(values) { entry in
+                        entryButton(entry)
                     }
-                }.padding(.vertical)
+                }
+                .padding(.horizontal)
+                .padding(.vertical)
             }.refreshable { await store.refresh() }
         }
     }
 
-    private func categoryButton(_ name: String, count: Int, id: UUID?) -> some View {
-        Button { withAnimation { category = id } } label: {
+    private func groupButton(_ name: String, count: Int, id: String?) -> some View {
+        Button { withAnimation { groupPage = id } } label: {
             HStack(spacing: 6) {
-                Text(name).font(.subheadline.weight(category == id ? .semibold : .medium))
+                Text(name).font(.subheadline.weight(groupPage == id ? .semibold : .medium))
                 Text("\(count)")
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(category == id ? Color.accentColor : .secondary)
+                    .foregroundStyle(groupPage == id ? Color.accentColor : .secondary)
                     .padding(.horizontal, 7).padding(.vertical, 3)
-                    .background(Color(uiColor: category == id ? UIColor.tertiarySystemFill : UIColor.secondarySystemFill), in: Capsule())
+                    .background(Color(uiColor: groupPage == id ? UIColor.tertiarySystemFill : UIColor.secondarySystemFill), in: Capsule())
             }
-            .foregroundStyle(category == id ? Color.accentColor : .secondary)
+            .foregroundStyle(groupPage == id ? Color.accentColor : .secondary)
             .padding(.vertical, 12)
             .overlay(alignment: .bottom) {
-                if category == id { Capsule().fill(Color.accentColor).frame(height: 3) }
+                if groupPage == id { Capsule().fill(Color.accentColor).frame(height: 3) }
             }
-        }.buttonStyle(.plain).id(id?.uuidString ?? "all")
-        .accessibilityAddTraits(category == id ? .isSelected : [])
+        }.buttonStyle(.plain).id(id ?? "all")
+        .accessibilityAddTraits(groupPage == id ? .isSelected : [])
     }
 
     private func entryButton(_ entry: MCPersonalEntry) -> some View {

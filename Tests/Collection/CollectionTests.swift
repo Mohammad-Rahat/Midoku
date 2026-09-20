@@ -130,4 +130,20 @@ struct CollectionTests {
         #expect(reloaded.entry(id)?.chapterGridOverride == false)
     }
 
+    @Test func resettingChapterThumbnailsKeepsOtherChapterEdits() throws {
+        var state = MCLibraryState()
+        let id = try state.add(details: details(), connectionID: a, records: records([1]), language: nil)
+        let cover = MCLibraryCover(data: Data([0xFF, 0xD8, 0xFF]))
+        state.covers.append(cover)
+        try state.editEntry(id) { entry in
+            entry.slots[0].variants[0].edits = .init(title: "Keep title", number: "1.5", coverID: cover.id)
+        }
+        try state.resetChapterThumbnails(entryID: id)
+        let edits = try #require(state.entry(id)?.slots.first?.preferred?.edits)
+        #expect(edits.title == "Keep title")
+        #expect(edits.number == "1.5")
+        #expect(edits.coverID == nil)
+        #expect(state.covers.isEmpty)
+    }
+
 }
