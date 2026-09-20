@@ -4,9 +4,9 @@ nonisolated extension MCLibraryState {
     func validate(connections: Set<UUID>, categories: Set<UUID>) throws {
         func unique<T: Hashable>(_ values: [T]) -> Bool { Set(values).count == values.count }
         guard entries.count <= 5000, listings.count <= 15_000, chapters.count <= 100_000,
-              clipboard.count <= 5000, covers.count <= 5000, updates.count <= 1000,
+              covers.count <= 5000, updates.count <= 1000,
               unique(entries.map(\.id)), unique(listings.map(\.id)), unique(listings.map(\.identity)),
-              unique(chapters.map(\.id)), unique(chapters.map(\.identity)), unique(covers.map(\.id)), unique(clipboard.map(\.id)),
+              unique(chapters.map(\.id)), unique(chapters.map(\.identity)), unique(covers.map(\.id)),
               unique(updates.map(\.id)) else { throw MCLibraryFailure.invalid }
         let listingKeys = Set(listings.map(\.identity)), chapterIDs = Set(chapters.map(\.id))
         let coverIDs = Set(covers.map(\.id)), listingIDs = Set(listings.map(\.id)), entryIDs = Set(entries.map(\.id))
@@ -55,8 +55,7 @@ nonisolated extension MCLibraryState {
                 guard reader.brightness.isFinite, (0.05...1).contains(reader.brightness) else { throw MCLibraryFailure.invalid }
             }
         }
-        guard clipboard.allSatisfy({ chapterIDs.contains($0.chapterID) && valid($0.edits) }),
-              completed.allSatisfy({ connections.contains($0.listing.connectionID) && !$0.externalID.isEmpty && !$0.listing.externalID.isEmpty }),
+        guard completed.allSatisfy({ connections.contains($0.listing.connectionID) && !$0.externalID.isEmpty && !$0.listing.externalID.isEmpty }),
               updates.allSatisfy({ entryIDs.contains($0.entryID) && chapterIDs.contains($0.chapterID) && $0.discoveredAt.timeIntervalSince1970.isFinite }) else { throw MCLibraryFailure.invalid }
     }
 
@@ -95,9 +94,6 @@ nonisolated extension MCLibraryState {
             incoming.exclusions = Set(incoming.exclusions.compactMap { chaptersMap[$0] })
             result.entries.append(incoming)
         }
-        if result.clipboard.isEmpty {
-            result.clipboard = imported.clipboard.map { var item = $0; item.chapterID = chaptersMap[item.chapterID] ?? item.chapterID; return item }
-        }
         let localPhysical = Set(chapters.map(\.identity))
         result.completed.formUnion(imported.completed.filter { !localPhysical.contains($0) })
         for var update in imported.updates where !result.updates.contains(where: { $0.id == update.id }) {
@@ -108,4 +104,3 @@ nonisolated extension MCLibraryState {
         return result
     }
 }
-

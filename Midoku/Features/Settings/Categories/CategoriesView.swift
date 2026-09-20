@@ -183,15 +183,10 @@ extension CategoriesView {
 
     func removeCategory(title: String) async -> Bool {
         await CoreDataManager.shared.container.performBackgroundTask { context in
-            CoreDataManager.shared.removeCategory(title: title, context: context)
-            do {
-                try context.save()
-                var locked = AppSettings.library.lockedCategories.get()
-                if let oldIndex = locked.firstIndex(of: title) {
-                    locked.remove(at: oldIndex)
-                    AppSettings.library.lockedCategories.set(locked)
-                }
-                return true
+                CoreDataManager.shared.removeCategory(title: title, context: context)
+                do {
+                    try context.save()
+                    return true
             } catch {
                 LogManager.logger.error("CategoriesView.removeCategory(title: \(title)): \(error)")
                 return false
@@ -209,11 +204,6 @@ extension CategoriesView {
                     guard success else { return nil }
                     do {
                         try context.save()
-                        var locked = AppSettings.library.lockedCategories.get()
-                        if let oldIndex = locked.firstIndex(of: title) {
-                            locked[oldIndex] = newTitle
-                            AppSettings.library.lockedCategories.set(locked)
-                        }
                         return CoreDataManager.shared.getCategoryTitles(context: context)
                     } catch {
                         LogManager.logger.error("CategoriesView.renameCategory(title: \(title)): \(error)")

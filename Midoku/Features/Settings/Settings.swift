@@ -46,6 +46,15 @@ enum Settings {
                 key: AppSettings.general.incognitoMode.key,
                 title: NSLocalizedString("INCOGNITO_MODE"),
                 value: .toggle(.init(subtitle: NSLocalizedString("INCOGNITO_MODE_TEXT")))
+            ),
+            .init(
+                key: AppSettings.general.appLock.key,
+                title: "App Lock",
+                notification: AppSettings.general.appLock.key,
+                value: .toggle(.init(
+                    subtitle: "Require Face ID, Touch ID, or the device passcode to open Midoku.",
+                    authToDisable: true
+                ))
             )
         ]))),
         .init(value: .group(.init(items: [
@@ -255,19 +264,6 @@ extension Settings {
                 ))
             )
         ]))),
-        .init(value: .group(.init(items: [
-            .init(
-                key: AppSettings.library.lockLibrary.key,
-                title: NSLocalizedString("LOCK_LIBRARY"),
-                notification: "updateLibraryLock",
-                value: .toggle(.init(authToDisable: true))
-            ),
-            .init(
-                key: "History.lockHistoryTab",
-                title: NSLocalizedString("LOCK_HISTORY_TAB"),
-                value: .toggle(.init(authToDisable: true))
-            )
-        ]))),
         .init(
             title: NSLocalizedString("CATEGORIES"),
             value: .group(.init(items: [
@@ -284,13 +280,6 @@ extension Settings {
                 .init(
                     key: AppSettings.library.defaultCategory.key,
                     title: NSLocalizedString("DEFAULT_CATEGORY"),
-                    value: .custom
-                ),
-                .init(
-                    key: AppSettings.library.lockedCategories.key,
-                    title: NSLocalizedString("LOCKED_CATEGORIES"),
-                    notification: "updateLibraryLock",
-                    requires: AppSettings.library.lockLibrary.key,
                     value: .custom
                 ),
                 .init(

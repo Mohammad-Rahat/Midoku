@@ -76,12 +76,6 @@ nonisolated struct MCPersonalEntry: Codable, Identifiable, Sendable {
     var descendingDisplay = false
 }
 
-nonisolated struct MCCopiedChapter: Codable, Identifiable, Sendable {
-    var id: UUID { chapterID }
-    var chapterID: UUID
-    var edits = MCChapterEdits()
-}
-
 /// Bounded, normalized JPEG/PNG bytes travel with the transactional backup; no arbitrary paths.
 nonisolated struct MCLibraryCover: Codable, Identifiable, Sendable {
     var id = UUID()
@@ -101,29 +95,11 @@ nonisolated struct MCLibraryUpdate: Codable, Identifiable, Sendable {
     var discoveredAt = Date()
 }
 
-nonisolated enum MCPasteAction: String, CaseIterable, Identifiable, Sendable {
-    case unresolved, skip, separate, alternative, replace
-    var id: String { rawValue }
-    var title: String {
-        switch self { case .unresolved: "Choose…"; case .skip: "Skip"; case .separate: "Keep separate"; case .alternative: "Keep alternative"; case .replace: "Replace existing" }
-    }
-}
-
-nonisolated struct MCPasteChoice: Identifiable, Sendable {
-    var id: UUID { item.chapterID }
-    var item: MCCopiedChapter
-    var action: MCPasteAction
-    var targetSlotID: UUID?
-    var restoreExcluded = false
-    var preserveCompletion = false
-}
-
 nonisolated struct MCLibraryState: Codable, Sendable {
     var entries: [MCPersonalEntry] = []
     var listings: [MCLibraryListing] = []
     var chapters: [MCLibraryChapter] = []
     var covers: [MCLibraryCover] = []
-    var clipboard: [MCCopiedChapter] = []
     var completed: Set<MCSourceChapterIdentity> = []
     var updates: [MCLibraryUpdate] = []
 
@@ -272,66 +248,22 @@ nonisolated struct MCLibraryState: Codable, Sendable {
         updates = Array(updates.suffix(1000))
     }
 
-    mutating func copy(_ items: [MCCopiedChapter]) throws {
-        guard !items.isEmpty, items.count <= 5000, Set(items.map(\.id)).count == items.count,
-              items.allSatisfy({ chapter($0.chapterID) != nil }) else { throw MCLibraryFailure.invalid }
-        clipboard = items
-    }
-
-    func pastePreview(entryID: UUID, items: [MCCopiedChapter]? = nil) throws -> [MCPasteChoice] {
-        guard let entry = entry(entryID) else { throw MCLibraryFailure.missing }
-        let existing = Set(entry.slots.flatMap(\.variants).map(\.chapterID))
-        return (items ?? clipboard).map { item in
-            let incoming = MCChapterVariant(chapterID: item.chapterID, edits: item.edits)
-            let match = entry.slots.first { slot in
-                guard let variant = slot.preferred, let lhs = number(variant), let rhs = number(incoming), !lhs.isEmpty, !rhs.isEmpty else { return false }
-                return Self.sameNumber(lhs, rhs)
-            }
-            return MCPasteChoice(item: item, action: existing.contains(item.chapterID) ? .skip : (match == nil ? .separate : .unresolved), targetSlotID: match?.id)
-        }
-    }
-
-    mutating func paste(entryID: UUID, revision: Int, choices: [MCPasteChoice], insertBefore: UUID? = nil) throws {
-        guard let index = entries.firstIndex(where: { $0.id == entryID }) else { throw MCLibraryFailure.missing }
-        guard entries[index].sequenceRevision == revision else { throw MCLibraryFailure.stalePreview }
-        guard Set(choices.map(\.id)).count == choices.count, choices.allSatisfy({ $0.action != .unresolved }) else { throw MCLibraryFailure.unresolved }
-        var candidate = self
-        var entry = candidate.entries[index]
-        for choice in choices where choice.action != .skip {
-            guard let source = chapter(choice.item.chapterID), let listing = listings.first(where: { $0.identity == source.identity.listing }) else { throw MCLibraryFailure.missing }
-            if entry.slots.flatMap(\.variants).contains(where: { $0.chapterID == source.id }) { continue }
-            guard !entry.exclusions.contains(source.id) || choice.restoreExcluded else { throw MCLibraryFailure.excluded }
+    mutating func addChapter(entryID: UUID, variant: MCChapterVariant) throws {
+        guard let source = chapter(variant.chapterID),
+              let listing = listings.first(where: { $0.identity == source.identity.listing })
+        else { throw MCLibraryFailure.missing }
+        try editEntry(entryID) { entry in
+            guard !entry.slots.flatMap(\.variants).contains(where: { $0.chapterID == source.id }) else { return }
             entry.exclusions.remove(source.id)
             if !entry.links.contains(where: { $0.listingID == listing.id }) {
-                entry.links.append(MCEntrySourceLink(listingID: listing.id, followsNewChapters: false, language: source.record.language))
+                entry.links.append(MCEntrySourceLink(
+                    listingID: listing.id,
+                    followsNewChapters: false,
+                    language: source.record.language
+                ))
             }
-            let variant = MCChapterVariant(chapterID: source.id, edits: choice.item.edits)
-            switch choice.action {
-            case .alternative, .replace:
-                guard let slotIndex = entry.slots.firstIndex(where: { $0.id == choice.targetSlotID }) else { throw MCLibraryFailure.stalePreview }
-                let wasRead = isRead(entry.slots[slotIndex])
-                if choice.action == .replace {
-                    entry.exclusions.formUnion(entry.slots[slotIndex].variants.map(\.chapterID))
-                    entry.slots[slotIndex].variants = [variant]
-                    entry.slots[slotIndex].preferredID = variant.id
-                    entry.slots[slotIndex].completionOverride = choice.preserveCompletion && wasRead ? true : nil
-                } else { entry.slots[slotIndex].variants.append(variant) }
-            case .separate:
-                let slot = MCChapterSlot(variant: variant)
-                if let insertBefore, let position = entry.slots.firstIndex(where: { $0.id == insertBefore }) {
-                    entry.slots.insert(slot, at: position); entry.manualOrder = true
-                } else { entry.slots.append(slot) }
-            case .skip, .unresolved: break
-            }
+            entry.slots.append(MCChapterSlot(variant: variant))
         }
-        entry.sequenceRevision += 1; entry.updatedAt = Date()
-        if !entry.manualOrder { candidate.sortSequence(&entry) }
-        candidate.entries[index] = entry
-        // Only consume this preview's clipboard items after the paste succeeds.
-        // Chapters copied while the sheet was open must not be discarded.
-        let reviewed = Set(choices.map(\.id))
-        candidate.clipboard.removeAll { reviewed.contains($0.id) }
-        self = candidate
     }
 
     mutating func removeSlots(entryID: UUID, slotIDs: Set<UUID>) throws {

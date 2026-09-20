@@ -6,7 +6,6 @@ struct MCEntryView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var store = MCCollectionStore.shared
     @State private var showEdit = false
-    @State private var showPaste = false
     @State private var showSources = false
     @State private var selected = Set<UUID>()
     @State private var selecting = false
@@ -36,7 +35,7 @@ struct MCEntryView: View {
                         header(entry).padding(.horizontal)
                         Section {
                             if slots.isEmpty {
-                                Text("Copy chapters from a source, then paste them here.").foregroundStyle(.secondary).padding(.horizontal)
+                                Text("Add chapters from a source to this entry.").foregroundStyle(.secondary).padding(.horizontal)
                             }
                             if grid {
                                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top),
@@ -60,7 +59,6 @@ struct MCEntryView: View {
                         Menu {
                             Button("Edit entry", systemImage: "square.and.pencil") { showEdit = true }
                             Button("Reset edits", systemImage: "arrow.counterclockwise") { confirmReset = true }
-                            if !store.library.clipboard.isEmpty { Button("Paste chapters", systemImage: "doc.on.clipboard") { showPaste = true } }
                             Button("Sources and alternatives", systemImage: "square.stack.3d.up") { showSources = true }
                             Toggle("Chapter grid", isOn: $grid)
                             Button("Reorder chapters", systemImage: "line.3.horizontal") { selecting = false; showReorder = true }
@@ -76,7 +74,6 @@ struct MCEntryView: View {
             } else { ContentUnavailableView("Entry unavailable", systemImage: "book.closed") }
         }
         .sheet(isPresented: $showEdit) { MCEntryEditor(entryID: entryID) }
-        .sheet(isPresented: $showPaste) { MCPasteView(entryID: entryID) }
         .sheet(isPresented: $showSources) { MCEntrySourcesView(entryID: entryID) }
         .sheet(isPresented: $showReorder) { MCChapterOrderView(entryID: entryID) }
         .sheet(item: $editingChapter) { MCChapterEditor(entryID: entryID, slotID: $0.id) }
@@ -104,7 +101,6 @@ struct MCEntryView: View {
             let args = ProcessInfo.processInfo.arguments
             if args.contains("--collection-preview") { try? await Task.sleep(for: .milliseconds(750)) }
             if args.contains("--edit-preview") { showEdit = true }
-            if args.contains("--paste-preview") { showPaste = true }
             if args.contains("--chapter-selection-preview") { grid = true; selecting = true; selected = Set(slots.prefix(2).map(\.id)) }
             #endif
         }
@@ -138,7 +134,6 @@ struct MCEntryView: View {
                     }
                     Spacer()
                     Menu {
-                        Button("Copy chapters", systemImage: "doc.on.doc") { copySelected(); selecting = false; selected.removeAll() }
                         Button("Mark read", systemImage: "checkmark") { store.setRead(entryID: entryID, slotIDs: selected, read: true) }
                         Button("Mark unread", systemImage: "circle") { store.setRead(entryID: entryID, slotIDs: selected, read: false) }
                         Button("Remove chapters", systemImage: "trash", role: .destructive) { confirmRemoveChapters = true }
@@ -192,9 +187,6 @@ struct MCEntryView: View {
                 }
                 .buttonStyle(.bordered)
             }
-            if !store.library.clipboard.isEmpty {
-                Button("Paste \(store.library.clipboard.count) copied chapters", systemImage: "doc.on.clipboard") { showPaste = true }.font(.subheadline)
-            }
         }
     }
 
@@ -212,10 +204,6 @@ struct MCEntryView: View {
                 Button("Read chapter", systemImage: "book") { open(slot) }
                 Button("Edit chapter", systemImage: "pencil") { editingChapter = MCID(id: slot.id) }
                 Button("Reset edits", systemImage: "arrow.counterclockwise") { resettingChapter = MCID(id: slot.id) }
-                Button("Copy chapter", systemImage: "doc.on.doc") {
-                    guard let variant = slot.preferred else { return }
-                    store.perform { try $0.library.copy([MCCopiedChapter(chapterID: variant.chapterID, edits: variant.edits)]) }
-                }
                 Button(store.library.isRead(slot) ? "Mark unread" : "Mark read") { store.setRead(entryID: entryID, slotIDs: [slot.id], read: !store.library.isRead(slot)) }
                 Button("Download", systemImage: "arrow.down.circle") {
                     guard let variant = slot.preferred, let chapter = store.library.chapter(variant.chapterID), let physical = store.physical(chapter.identity) else { return }
@@ -248,14 +236,18 @@ struct MCEntryView: View {
                         if gridStyle == .compact, let variant = slot.preferred {
                             Text(store.library.chapterDisplayTitle(variant)).font(.caption.weight(.semibold)).lineLimit(1)
                                 .foregroundStyle(.white).padding(.horizontal, 8).padding(.top, 24).padding(.bottom, 8)
+                                .padding(.leading, store.library.isRead(slot) && !selecting ? 20 : 0)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .background(LinearGradient(colors: [.clear, .black.opacity(0.85)], startPoint: .top, endPoint: .bottom))
                         }
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 7))
+                    .overlay(alignment: .bottomLeading) {
+                        if store.library.isRead(slot) && !selecting { readMark.padding(6) }
+                    }
                     .overlay(alignment: .topTrailing) { if selecting { selectionMark(slot).padding(6) } }
                 if gridStyle == .standard { chapterText(slot, compact: true) }
-            }.opacity(store.library.isRead(slot) && !selecting ? 0.65 : 1)
+            }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(slot.preferred.map { store.library.chapterDisplayTitle($0) } ?? "Chapter")
                 .accessibilityAddTraits(selected.contains(slot.id) ? .isSelected : [])
@@ -276,6 +268,16 @@ struct MCEntryView: View {
             .background(Circle().fill(Color.accentColor)).accessibilityLabel(selected.contains(slot.id) ? "Selected" : "Not selected")
     }
 
+    private var readMark: some View {
+        Image(systemName: "checkmark")
+            .font(.system(size: 9, weight: .bold))
+            .foregroundStyle(.white)
+            .frame(width: 18, height: 18)
+            .background(.black.opacity(0.58), in: Circle())
+            .overlay(Circle().stroke(.white.opacity(0.28), lineWidth: 0.5))
+            .accessibilityLabel("Read")
+    }
+
     private func chapterText(_ slot: MCChapterSlot, compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             if let variant = slot.preferred, let chapter = store.library.chapter(variant.chapterID) {
@@ -294,11 +296,6 @@ struct MCEntryView: View {
         do { reader = MCReaderSheet(sequence: try MCReaderSequence(entryID: entryID, slotID: slot.id)) }
         catch { store.error = error.localizedDescription }
     }
-    private func copySelected() {
-        let items = entry?.slots.filter { selected.contains($0.id) }.compactMap(\.preferred).map { MCCopiedChapter(chapterID: $0.chapterID, edits: $0.edits) } ?? []
-        store.perform { try $0.library.copy(items) }
-    }
-
     private func copy(_ value: String) {
         UIPasteboard.general.string = value
         UINotificationFeedbackGenerator().notificationOccurred(.success)

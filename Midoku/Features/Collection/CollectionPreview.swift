@@ -22,9 +22,8 @@ enum MCCollectionPreview {
                 authors: ["Midoku Preview"], description: "An editable edition with chapters collected from different sources.")
             let b = AidokuRunner.Manga(sourceKey: "preview.b", key: "book", title: "The Paper Lantern")
             let id = try store.add(a, chapters: [20, 22, 23, 24].map { .init(key: "c\($0)", title: $0 == 24 ? nil : "Across the quiet city", chapterNumber: Float($0)) }, status: .reading)
-            store.copy(manga: b, chapters: [.init(key: "c21", title: "The missing chapter", chapterNumber: 21)])
+            try store.addChapter(.init(key: "c21", title: "The missing chapter", chapterNumber: 21), from: b, to: id, title: "Chapter 21")
             try store.change { state in
-                try state.library.paste(entryID: id, revision: 0, choices: state.library.pastePreview(entryID: id))
                 let category = MCCategory(name: "Reading")
                 state.categories = [category, MCCategory(name: "Favorites")]
                 state.legacyCategoriesImported = true
@@ -40,9 +39,6 @@ enum MCCollectionPreview {
                 let other = try state.library.createManual(title: "Weekend reading", description: "Your next collection starts here.")
                 if let cover = state.library.covers.first { try state.library.editEntry(other) { $0.coverID = cover.id } }
                 _ = try state.library.createManual(title: "Stories for later")
-            }
-            if args.contains("--paste-preview") {
-                store.copy(manga: b, chapters: [.init(key: "c25", title: "A new beginning", chapterNumber: 25)])
             }
             entryID = id
             if args.contains("--empty-preview") { try store.change { $0.library.entries.removeAll() } }

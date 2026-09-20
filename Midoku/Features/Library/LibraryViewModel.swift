@@ -171,12 +171,7 @@ class LibraryViewModel {
 
 extension LibraryViewModel {
     func isCategoryLocked() -> Bool {
-        guard AppSettings.library.lockLibrary.get() else { return false }
-        if let currentCategory, !currentCategory.isEmpty {
-            let lockedCategories = AppSettings.library.lockedCategories.get()
-            return lockedCategories.contains(currentCategory)
-        }
-        return true
+        false
     }
 
     func getPinType() -> PinType {

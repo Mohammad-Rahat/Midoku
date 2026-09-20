@@ -6,7 +6,6 @@
 //
 
 import AidokuRunner
-import LocalAuthentication
 import SwiftUI
 import SwiftUIIntrospect
 
@@ -21,8 +20,6 @@ struct HistoryView: View {
     @State private var triggerLoadMoreVisibleCheck = false
     @State private var loadTask: Task<(), Never>?
 
-    @State private var locked = UserDefaults.standard.bool(forKey: "History.lockHistoryTab")
-
     @State private var listSelection: String? // fix for list highlighting being buggy
 
     @State private var openingLastRead = false
@@ -31,9 +28,7 @@ struct HistoryView: View {
 
     var body: some View {
         Group {
-            if locked {
-                lockedView
-            } else if viewModel.filteredHistory.isEmpty && viewModel.loadingState == .complete {
+            if viewModel.filteredHistory.isEmpty && viewModel.loadingState == .complete {
                 UnavailableView(
                     NSLocalizedString("NO_HISTORY"),
                     systemImage: "book.fill",
@@ -92,19 +87,6 @@ struct HistoryView: View {
         .midokuAccent()
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                if UserDefaults.standard.bool(forKey: "History.lockHistoryTab") {
-                    Button {
-                        if locked {
-                            Task {
-                                await unlock()
-                            }
-                        } else {
-                            locked = true
-                        }
-                    } label: {
-                        Image(systemName: locked ? "lock" : "lock.open")
-                    }
-                }
                 Button {
                     showClearHistoryConfirm = true
                 } label: {
@@ -137,39 +119,12 @@ struct HistoryView: View {
         } message: {
             Text(NSLocalizedString("CLEAR_READ_HISTORY_TEXT"))
         }
-        .onReceive(NotificationCenter.default.publisher(for: .historyLockTabSetting)) { _ in
-            // update locked state when the setting changes
-            locked = UserDefaults.standard.bool(forKey: "History.lockHistoryTab")
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
-            // lock the view when the app is backgrounded
-            locked = UserDefaults.standard.bool(forKey: "History.lockHistoryTab")
-        }
         .onReceive(NotificationCenter.default.publisher(for: .historyTabReselected)) { _ in
             // the history tab was selected while already at the top of the list
             Task {
                 await continueReading()
             }
         }
-    }
-
-    var lockedView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "lock.fill")
-                .font(.system(size: 60))
-                .foregroundStyle(.secondary)
-
-            Text(NSLocalizedString("HISTORY_LOCKED"))
-                .fontWeight(.medium)
-
-            Button(NSLocalizedString("VIEW_HISTORY")) {
-                Task {
-                    await unlock()
-                }
-            }
-        }
-        .padding(.top, -52) // slight offset to account for search bar and make the view more centered
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     func headerView(daysAgo: Int) -> some View {
@@ -323,27 +278,6 @@ struct HistoryView: View {
         path.present(navigationController)
     }
 
-    // prompt for biometrics to unlock the view
-    func unlock() async {
-        let context = LAContext()
-        let success: Bool
-
-        do {
-            success = try await context.evaluatePolicy(
-                .defaultPolicy,
-                localizedReason: NSLocalizedString("AUTH_FOR_HISTORY")
-            )
-        } catch {
-            // The error is to be displayed to users, so we can ignore it.
-            return
-        }
-
-        guard success else {
-            return
-        }
-
-        locked = false
-    }
 }
 
 private struct HistoryEntryCell: View, @MainActor Equatable {

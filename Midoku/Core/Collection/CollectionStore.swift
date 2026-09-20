@@ -201,16 +201,6 @@ final class MCCollectionStore {
         return result
     }
 
-    func copy(manga: AidokuRunner.Manga, chapters: [AidokuRunner.Chapter]) {
-        let name = SourceStore.shared.source(for: manga.sourceKey)?.name ?? manga.sourceKey
-        perform { state in
-            let listingID = try state.remember(manga, chapters: chapters, sourceName: name, complete: false)
-            guard let listing = state.library.listing(listingID) else { throw MCLibraryFailure.missing }
-            let ids = Dictionary(uniqueKeysWithValues: state.library.chapters.filter { $0.identity.listing == listing.identity }.map { ($0.record.id, $0.id) })
-            try state.library.copy(chapters.compactMap { ids[$0.key].map { MCCopiedChapter(chapterID: $0) } })
-        }
-    }
-
     func addChapter(_ chapter: AidokuRunner.Chapter, from manga: AidokuRunner.Manga, to entryID: UUID, title: String) throws {
         let sourceName = SourceStore.shared.source(for: manga.sourceKey)?.name ?? manga.sourceKey
         let displayTitle = chapter.formattedTitle()
@@ -224,19 +214,14 @@ final class MCCollectionStore {
                 let chapterID = state.library.chapters.first(where: {
                     $0.identity.listing == listing.identity && $0.record.id == chapter.key
                 })?.id,
-                let entry = state.library.entry(entryID)
+                state.library.entry(entryID) != nil
             else { throw MCLibraryFailure.missing }
 
-            let existingClipboard = state.library.clipboard
             let edits = MCChapterEdits(title: trimmedTitle == displayTitle ? nil : trimmedTitle)
-            let item = MCCopiedChapter(chapterID: chapterID, edits: edits)
-            guard var choice = try state.library.pastePreview(entryID: entryID, items: [item]).first else {
-                throw MCLibraryFailure.missing
-            }
-            guard choice.action != .skip else { return }
-            choice.action = .separate
-            try state.library.paste(entryID: entryID, revision: entry.sequenceRevision, choices: [choice])
-            state.library.clipboard = existingClipboard
+            try state.library.addChapter(
+                entryID: entryID,
+                variant: MCChapterVariant(chapterID: chapterID, edits: edits)
+            )
         }
     }
 

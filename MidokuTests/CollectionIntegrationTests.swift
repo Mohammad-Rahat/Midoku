@@ -24,8 +24,7 @@ struct CollectionIntegrationTests {
         let a = AidokuRunner.Manga(sourceKey: "mc.routing.a", key: "book", title: "A")
         let b = AidokuRunner.Manga(sourceKey: "mc.routing.b", key: "book", title: "B")
         let entry = try store.add(a, chapters: [.init(key: "same", chapterNumber: 20), .init(key: "last", chapterNumber: 22)])
-        store.copy(manga: b, chapters: [.init(key: "same", chapterNumber: 21)])
-        try store.change { state in try state.library.paste(entryID: entry, revision: 0, choices: state.library.pastePreview(entryID: entry)) }
+        try store.addChapter(.init(key: "same", chapterNumber: 21), from: b, to: entry, title: "Chapter 21")
         let sequence = try MCReaderSequence(entryID: entry, slotID: try #require(store.library.entry(entry)?.slots.first).id, store: store)
         let model = ReaderPagedViewModel(source: testSources[a.sourceKey], manga: a)
         model.collectionSequence = sequence
@@ -51,8 +50,7 @@ struct CollectionIntegrationTests {
         let a = AidokuRunner.Manga(sourceKey: "source-a", key: "same-manga", title: "Original A")
         let b = AidokuRunner.Manga(sourceKey: "source-b", key: "same-manga", title: "Original B")
         let entry = try store.add(a, chapters: [.init(key: "same-chapter", chapterNumber: 20), .init(key: "22", chapterNumber: 22)])
-        store.copy(manga: b, chapters: [.init(key: "same-chapter", chapterNumber: 21)])
-        try store.change { state in try state.library.paste(entryID: entry, revision: 0, choices: state.library.pastePreview(entryID: entry)) }
+        try store.addChapter(.init(key: "same-chapter", chapterNumber: 21), from: b, to: entry, title: "Chapter 21")
         let reloaded = MCCollectionStore(fileURL: file)
         let personal = try #require(reloaded.library.entry(entry))
         let sequence = try MCReaderSequence(entryID: entry, slotID: try #require(personal.slots.first).id, store: reloaded)
@@ -62,7 +60,6 @@ struct CollectionIntegrationTests {
         let next = try #require(sequence.adjacent(to: sequence.chapters[0], offset: 1))
         #expect(sequence.route(next)?.identifier.sourceKey == "source-b")
         #expect(sequence.route(next)?.identifier.chapterKey == "same-chapter")
-        #expect(reloaded.library.clipboard.isEmpty)
         try reloaded.snapshot.validate()
     }
 
@@ -99,8 +96,7 @@ struct CollectionIntegrationTests {
         let b = AidokuRunner.Manga(sourceKey: "cover-b", key: "same", title: "Original B")
         let entry = try store.add(a, chapters: [.init(key: "shared", chapterNumber: 1)], title: "Edited on add", description: "My summary", author: "My author")
         let other = try store.add(b, chapters: [.init(key: "shared", chapterNumber: 2)])
-        store.copy(manga: b, chapters: [.init(key: "shared", chapterNumber: 2)])
-        try store.change { state in try state.library.paste(entryID: entry, revision: 0, choices: state.library.pastePreview(entryID: entry)) }
+        try store.addChapter(.init(key: "shared", chapterNumber: 2), from: b, to: entry, title: "Chapter 2")
         let personal = try #require(store.library.entry(entry))
         let slot = try #require(personal.slots.last)
         let variant = try #require(slot.preferred)
@@ -152,21 +148,18 @@ struct CollectionIntegrationTests {
         #expect(toolbar.nextChapterButton.frame.minX >= toolbar.sliderView.frame.maxX)
     }
 
-    @Test func failedPasteSaveKeepsClipboardAndEntryUnchanged() throws {
+    @Test func failedDirectAddSaveKeepsEntryUnchanged() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         let file = root.appendingPathComponent("collection.json")
         let store = MCCollectionStore(fileURL: file)
         let manga = AidokuRunner.Manga(sourceKey: "paste", key: "book", title: "Title")
         let entry = try store.add(manga, chapters: [.init(key: "one", chapterNumber: 1)])
-        store.copy(manga: manga, chapters: [.init(key: "two", chapterNumber: 2)])
-        let choices = try store.library.pastePreview(entryID: entry)
         try FileManager.default.removeItem(at: file)
         try FileManager.default.createDirectory(at: file, withIntermediateDirectories: true)
         #expect(throws: (any Error).self) {
-            try store.change { try $0.library.paste(entryID: entry, revision: 0, choices: choices) }
+            try store.addChapter(.init(key: "two", chapterNumber: 2), from: manga, to: entry, title: "Chapter 2")
         }
-        #expect(store.library.clipboard.count == 1)
         #expect(store.library.entry(entry)?.slots.count == 1)
     }
 

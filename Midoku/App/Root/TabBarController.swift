@@ -6,6 +6,7 @@
 //
 
 import Combine
+import LocalAuthentication
 import SwiftUI
 import SwiftUIIntrospect
 
@@ -21,6 +22,9 @@ class TabBarController: UITabBarController {
     private weak var searchNavigationController: UINavigationController?
 
     private let searchController = SearchViewController()
+    private var appLockOverlay: UIView?
+    private var appLockButton: UIButton?
+    private var unlockingApp = false
 
     private lazy var libraryProgressView = CircularProgressView(frame: CGRect(x: 0, y: 0, width: 20, height: 20))
 
@@ -197,6 +201,36 @@ class TabBarController: UITabBarController {
                 self?.updateFrame(animated: true)
             }
             .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)
+            .sink { [weak self] _ in
+                if AppSettings.general.appLock.get() { self?.showAppLock() }
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
+            .sink { [weak self] _ in self?.unlockAppIfNeeded() }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .init(AppSettings.general.appLock.key))
+            .sink { [weak self] _ in
+                if AppSettings.general.appLock.get() {
+                    self?.showAppLock()
+                    self?.unlockAppIfNeeded()
+                } else {
+                    self?.hideAppLock()
+                }
+            }
+            .store(in: &cancellables)
+
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        if AppSettings.general.appLock.get() {
+            showAppLock()
+            unlockAppIfNeeded()
+        }
     }
 
     func updateFrame(animated: Bool = false) {
@@ -223,6 +257,101 @@ class TabBarController: UITabBarController {
             }
         } else {
             commit()
+        }
+    }
+}
+
+private extension TabBarController {
+    func showAppLock() {
+        guard appLockOverlay == nil, let container = view.window ?? UIApplication.shared.firstKeyWindow else { return }
+
+        let overlay = UIView()
+        overlay.translatesAutoresizingMaskIntoConstraints = false
+        overlay.backgroundColor = .systemBackground
+        overlay.accessibilityViewIsModal = true
+
+        let symbol = UIImage.SymbolConfiguration(pointSize: 54, weight: .medium)
+        let icon = UIImageView(image: UIImage(systemName: "lock.fill", withConfiguration: symbol))
+        icon.tintColor = .secondaryLabel
+        icon.contentMode = .scaleAspectFit
+        icon.isAccessibilityElement = false
+
+        let title = UILabel()
+        title.text = "Midoku is locked"
+        title.font = .preferredFont(forTextStyle: .title2)
+        title.adjustsFontForContentSizeCategory = true
+        title.textAlignment = .center
+
+        let detail = UILabel()
+        detail.text = "Authenticate to continue."
+        detail.font = .preferredFont(forTextStyle: .subheadline)
+        detail.textColor = .secondaryLabel
+        detail.adjustsFontForContentSizeCategory = true
+        detail.textAlignment = .center
+
+        var configuration = UIButton.Configuration.filled()
+        configuration.title = "Unlock Midoku"
+        configuration.image = UIImage(systemName: "faceid")
+        configuration.imagePadding = 8
+        configuration.cornerStyle = .large
+        let button = UIButton(configuration: configuration)
+        button.addAction(UIAction { [weak self] _ in
+            Task { @MainActor in self?.unlockAppIfNeeded() }
+        }, for: .touchUpInside)
+        button.accessibilityHint = "Uses Face ID, Touch ID, or your device passcode"
+        appLockButton = button
+
+        let stack = UIStackView(arrangedSubviews: [icon, title, detail, button])
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.axis = .vertical
+        stack.alignment = .fill
+        stack.spacing = 12
+        stack.setCustomSpacing(22, after: detail)
+
+        overlay.addSubview(stack)
+        container.addSubview(overlay)
+        NSLayoutConstraint.activate([
+            overlay.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            overlay.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            overlay.topAnchor.constraint(equalTo: container.topAnchor),
+            overlay.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            stack.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: overlay.centerYAnchor, constant: -24),
+            stack.leadingAnchor.constraint(greaterThanOrEqualTo: overlay.leadingAnchor, constant: 36),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: overlay.trailingAnchor, constant: -36),
+            stack.widthAnchor.constraint(lessThanOrEqualToConstant: 340),
+            icon.heightAnchor.constraint(equalToConstant: 72),
+            button.heightAnchor.constraint(greaterThanOrEqualToConstant: 50)
+        ])
+        appLockOverlay = overlay
+    }
+
+    func hideAppLock() {
+        appLockOverlay?.removeFromSuperview()
+        appLockOverlay = nil
+        appLockButton = nil
+        unlockingApp = false
+    }
+
+    func unlockAppIfNeeded() {
+        guard AppSettings.general.appLock.get(), appLockOverlay != nil, !unlockingApp else { return }
+        unlockingApp = true
+        appLockButton?.isEnabled = false
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                self.unlockingApp = false
+                self.appLockButton?.isEnabled = true
+            }
+            do {
+                let success = try await LAContext().evaluatePolicy(
+                    .defaultPolicy,
+                    localizedReason: "Unlock Midoku"
+                )
+                if success { self.hideAppLock() }
+            } catch {
+                // Keep the lock screen visible so the user can retry.
+            }
         }
     }
 }

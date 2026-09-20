@@ -108,8 +108,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     ) -> Bool {
         UserDefaults.standard.register(
             defaults: [
-                "History.lockHistoryTab": false,
-
                 "Reader.readingMode": "auto",
                 "Reader.skipDuplicateChapters": true,
                 "Reader.markDuplicateChapters": true,
@@ -148,6 +146,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             ]
         )
         AppSettings.registerDefaults()
+        AppSettings.library.lockLibrary.set(false)
+        AppSettings.library.lockedCategories.set([])
+        UserDefaults.standard.set(false, forKey: "History.lockHistoryTab")
 
         // PlayCover fix: eagerly initialize the Core Data stack on the main thread
         // before any background migration task touches it. The `lazy var container`

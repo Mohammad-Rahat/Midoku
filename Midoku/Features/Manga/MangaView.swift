@@ -425,9 +425,6 @@ extension MangaView {
             chapterKey: chapter.key
         )
 
-        Button("Copy chapter", systemImage: "doc.on.doc") {
-            MCCollectionStore.shared.copy(manga: viewModel.manga, chapters: [chapter])
-        }
         Button("Add to entry", systemImage: "text.badge.plus") {
             addChapterToEntry = chapter
         }
