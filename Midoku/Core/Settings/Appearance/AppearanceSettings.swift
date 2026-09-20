@@ -13,6 +13,10 @@ struct AppearanceSettings: Sendable {
             useSystemAppearance,
             appearance,
             accent,
+            libraryGrid,
+            libraryGridStyle,
+            libraryPortraitColumns,
+            libraryLandscapeColumns,
             chapterGrid,
             chapterGridStyle,
             chapterPortraitColumns,
@@ -25,7 +29,11 @@ struct AppearanceSettings: Sendable {
 
     let useSystemAppearance = SettingsKey<Bool>("General.useSystemAppearance", default: true)
     let appearance = SettingsKey<Int>("General.appearance", default: 0)
-    let accent = SettingsKey<MidokuAccent>("Appearance.accent", default: .forest)
+    let accent = SettingsKey<String>("Appearance.accent", default: MidokuAccent.defaultHex)
+    let libraryGrid = SettingsKey<Bool>("Midoku.collectionGrid", default: true)
+    let libraryGridStyle = SettingsKey<ChapterGridStyle>("Appearance.libraryGridStyle", default: .standard)
+    let libraryPortraitColumns = SettingsKey<Int>("Appearance.libraryPortraitColumns", default: 3)
+    let libraryLandscapeColumns = SettingsKey<Int>("Appearance.libraryLandscapeColumns", default: 5)
     let chapterGrid = SettingsKey<Bool>("Midoku.chapterGrid", default: false)
     let chapterGridStyle = SettingsKey<ChapterGridStyle>("Appearance.chapterGridStyle", default: .standard)
     let chapterPortraitColumns = SettingsKey<Int>("Appearance.chapterPortraitColumns", default: 3)

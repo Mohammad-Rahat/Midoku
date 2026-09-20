@@ -21,6 +21,7 @@ extension MangaView {
         @Published var readingHistory: [String: (page: Int, date: Int)] = [:]
         @Published var downloadProgress: [String: Float] = [:] // chapterId: progress
         @Published var downloadStatus: [String: DownloadStatus] = [:] // chapterId: status
+        @Published var pageCounts: [String: Int] = [:]
 
         @Published var bookmarked = false
         @Published var hasCategories = false
@@ -54,6 +55,7 @@ extension MangaView {
 
         private var fetchedDetails = false
         private var markedOpened = false
+        private var loadingPageCounts = Set<String>()
         private var cancellables = Set<AnyCancellable>()
 
         init(source: AidokuRunner.Source?, manga: AidokuRunner.Manga) {
@@ -70,6 +72,33 @@ extension MangaView {
 
 // MARK: Notifications
 extension MangaView.ViewModel {
+    func loadPageCount(for chapter: AidokuRunner.Chapter) async {
+        guard pageCounts[chapter.key] == nil, loadingPageCounts.insert(chapter.key).inserted else { return }
+        defer { loadingPageCounts.remove(chapter.key) }
+
+        let identifier = ChapterIdentifier(
+            sourceKey: manga.sourceKey,
+            mangaKey: manga.key,
+            chapterKey: chapter.key
+        )
+
+        do {
+            let pages: [AidokuRunner.Page]
+            let status = downloadStatus[chapter.key, default: .none]
+            if status == .finished || status == .failed {
+                pages = await DownloadManager.shared.getDownloadedPages(for: identifier)
+            } else if let source {
+                pages = try await source.getPageList(manga: manga, chapter: chapter)
+            } else {
+                pageCounts[chapter.key] = 0
+                return
+            }
+            pageCounts[chapter.key] = pages.count
+        } catch {
+            pageCounts[chapter.key] = 0
+        }
+    }
+
     private func registerNotifications() {
         registerLibraryNotifications()
         registerSourceNotifications()

@@ -39,6 +39,7 @@ struct MangaDetailsHeaderView: View {
     var hasOtherDownloads: Bool
     var transitionNamespace: Namespace.ID
     var onTitlePressed: (() -> Void)?
+    var onCreatorPressed: ((String) -> Void)?
     var onTrackerButtonPressed: (() -> Void)?
     var onReadButtonPressed: (() -> Void)?
 
@@ -48,6 +49,8 @@ struct MangaDetailsHeaderView: View {
     @State private var readButtonDisabled = true
     @State private var animationTrigger = false
     @State private var longHeldBookmark = false
+    @State private var longHeldTitle = false
+    @State private var longHeldCreator = false
     @State private var longHeldSafari = false
     @State private var isTracking = false
     @State private var hasAvailableTrackers = false
@@ -77,6 +80,7 @@ struct MangaDetailsHeaderView: View {
         hasOtherDownloads: Bool,
         transitionNamespace: Namespace.ID,
         onTitlePressed: (() -> Void)? = nil,
+        onCreatorPressed: ((String) -> Void)? = nil,
         onTrackerButtonPressed: (() -> Void)? = nil,
         onReadButtonPressed: (() -> Void)? = nil
     ) {
@@ -101,6 +105,7 @@ struct MangaDetailsHeaderView: View {
         self.hasOtherDownloads = hasOtherDownloads
         self.transitionNamespace = transitionNamespace
         self.onTitlePressed = onTitlePressed
+        self.onCreatorPressed = onCreatorPressed
         self.onTrackerButtonPressed = onTrackerButtonPressed
         self.onReadButtonPressed = onReadButtonPressed
 
@@ -136,7 +141,11 @@ struct MangaDetailsHeaderView: View {
                     Spacer(minLength: 0)
 
                     Button {
-                        onTitlePressed?()
+                        if longHeldTitle {
+                            longHeldTitle = false
+                        } else {
+                            copy(manga.title)
+                        }
                     } label: {
                         Text(manga.title)
                             .lineLimit(4)
@@ -149,9 +158,14 @@ struct MangaDetailsHeaderView: View {
                     }
                     .buttonStyle(.borderless)
                     .padding(.bottom, 4)
+                    .simultaneousGesture(LongPressGesture().onEnded { _ in
+                        longHeldTitle = true
+                        onTitlePressed?()
+                    })
 
-                    if let authors = manga.authors, !authors.isEmpty {
-                        let label = Text(authors.joined(separator: ", "))
+                    if let creators = creatorNames, !creators.isEmpty {
+                        let value = creators.joined(separator: ", ")
+                        let label = Text(value)
                             .lineLimit(1)
                             .foregroundStyle(.secondary)
                             .font(.callout)
@@ -159,25 +173,20 @@ struct MangaDetailsHeaderView: View {
                             .textSelection(.enabled)
                             .transition(.opacity)
 
-                        if let source, source.supportsAuthorSearch {
-                            Button {
-                                // we'll need a better ui in the future for different author selection
-                                guard let author = authors.first else { return }
-
-                                let viewController = MangaListViewController(source: source, title: author)
-                                viewController.getEntries = { page in
-                                    try await source.getSearchMangaList(query: nil, page: page, filters: [
-                                        .text(id: "author", value: author)
-                                    ])
-                                }
-                                path.push(viewController)
-                            } label: {
-                                label
+                        Button {
+                            if longHeldCreator {
+                                longHeldCreator = false
+                            } else {
+                                copy(value)
                             }
-                            .buttonStyle(.borderless)
-                        } else {
+                        } label: {
                             label
                         }
+                        .buttonStyle(.borderless)
+                        .simultaneousGesture(LongPressGesture().onEnded { _ in
+                            longHeldCreator = true
+                            onCreatorPressed?(value)
+                        })
                     }
 
                     labelsView
@@ -200,23 +209,44 @@ struct MangaDetailsHeaderView: View {
 
             tagsView
 
-            // read button
-            Button {
-                onReadButtonPressed?()
-            } label: {
-                Text(readButtonText)
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
+            HStack(spacing: 10) {
+                Button {
+                    onReadButtonPressed?()
+                } label: {
+                    Text(readButtonText)
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 14, weight: .medium))
+                .padding(11)
+                .foregroundStyle(.white)
+                .background(Color.accentColor)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .allowsHitTesting(!readButtonDisabled)
+
+                Button {
+                    if bookmarked && isTracking {
+                        showLibraryRemoveConfirm = true
+                    } else {
+                        Task { await toggleBookmarked() }
+                    }
+                } label: {
+                    Label(bookmarked ? "Unsave" : "Save", systemImage: bookmarked ? "bookmark.slash" : "bookmark")
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 14, weight: .medium))
+                .padding(10)
+                .foregroundStyle(Color.accentColor)
+                .background(Color(UIColor.secondarySystemFill))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.accentColor.opacity(0.28)))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .allowsHitTesting(bookmarked || source != nil)
             }
-            .buttonStyle(.plain)
-            .font(.system(size: 14, weight: .medium))
-            .padding(11)
-            .foregroundStyle(.white)
-            .background(Color.accentColor)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .padding(.bottom, 20)
             .padding(.horizontal, 20)
-            .allowsHitTesting(!readButtonDisabled)
 
             // hide the chapter list header if there are no chapters and the other downloads header is shown
             if !(manga.chapters ?? chapters).isEmpty || !hasOtherDownloads {
@@ -270,6 +300,19 @@ struct MangaDetailsHeaderView: View {
             updateReadButtonText()
             hasAvailableTrackers = await TrackerManager.shared.hasAvailableTrackers(mangaId: manga.identifier)
         }
+    }
+
+    private var creatorNames: [String]? {
+        let values = (manga.authors ?? []) + (manga.artists ?? [])
+        let unique = values.reduce(into: [String]()) { result, value in
+            if !result.contains(value) { result.append(value) }
+        }
+        return unique.isEmpty ? nil : unique
+    }
+
+    private func copy(_ value: String) {
+        UIPasteboard.general.string = value
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 
     @ViewBuilder

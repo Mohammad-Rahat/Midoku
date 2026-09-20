@@ -29,6 +29,7 @@ struct MangaView: View {
     @State private var loadingAlert: UIAlertController?
 
     @State private var openChapter: AidokuRunner.Chapter?
+    @State private var addChapterToEntry: AidokuRunner.Chapter?
 
     @StateObject private var refreshController = RefreshController()
 
@@ -255,6 +256,9 @@ struct MangaView: View {
                 .ignoresSafeArea()
                 .navigationTransitionZoom(sourceID: chapter, in: transitionNamespace)
             }
+            .sheet(item: $addChapterToEntry) { chapter in
+                MCAddChapterToEntryView(manga: viewModel.manga, chapter: chapter)
+            }
             .environment(\.editMode, $editMode)
             .clearsStaleListSelection(selectedChapters)
         }
@@ -309,6 +313,12 @@ extension MangaView {
                     }
                     tabBarController.search(for: viewModel.manga.title)
                 },
+                onCreatorPressed: { value in
+                    guard let tabBarController = path.rootViewController?.tabBarController as? TabBarController else {
+                        return
+                    }
+                    tabBarController.search(for: value)
+                },
                 onTrackerButtonPressed: {
                     let vc = TrackerModalViewController(manga: viewModel.manga)
                     vc.modalPresentationStyle = .overFullScreen
@@ -359,29 +369,37 @@ extension MangaView {
             chapter: chapter,
             read: viewModel.readingHistory[chapter.key]?.page == -1,
             page: viewModel.readingHistory[chapter.key]?.page,
+            totalPages: viewModel.pageCounts[chapter.key],
+            alwaysShowPageCount: viewModel.source != nil && !viewModel.manga.isLocal(),
+            fallbackThumbnail: viewModel.manga.cover,
             downloadStatus: downloadStatus,
             downloadProgress: viewModel.downloadProgress[chapter.key],
             displayMode: viewModel.chapterTitleDisplayMode,
-            isEditing: editMode == .active
-        ) {
-            if editMode == .inactive {
-                openChapter = chapter
-            } else {
-                if selectedChapters.contains(chapter.key) {
-                    selectedChapters.remove(chapter.key)
+            isEditing: editMode == .active,
+            loadPageCount: {
+                await viewModel.loadPageCount(for: chapter)
+            },
+            onPressed: {
+                if editMode == .inactive {
+                    openChapter = chapter
                 } else {
-                    selectedChapters.insert(chapter.key)
+                    if selectedChapters.contains(chapter.key) {
+                        selectedChapters.remove(chapter.key)
+                    } else {
+                        selectedChapters.insert(chapter.key)
+                    }
                 }
+            },
+            contextMenu: {
+                contextMenu(
+                    chapter: chapter,
+                    downloadStatus: downloadStatus,
+                    index: index,
+                    last: last,
+                    secondSection: secondSection
+                )
             }
-        } contextMenu: {
-            contextMenu(
-                chapter: chapter,
-                downloadStatus: downloadStatus,
-                index: index,
-                last: last,
-                secondSection: secondSection
-            )
-        }
+        )
         // use equatableview to determine when to refresh the view
         // improves the scrolling performance of the list
         .equatable()
@@ -409,6 +427,9 @@ extension MangaView {
 
         Button("Copy chapter", systemImage: "doc.on.doc") {
             MCCollectionStore.shared.copy(manga: viewModel.manga, chapters: [chapter])
+        }
+        Button("Add to entry", systemImage: "text.badge.plus") {
+            addChapterToEntry = chapter
         }
         let hasDownloadButton = viewModel.source != nil && !viewModel.manga.isLocal() && downloadStatus != .finished && downloadStatus != .downloading
         let hasShareButton = downloadStatus == .finished || chapter.url != nil
@@ -811,10 +832,14 @@ private struct ChapterCellView<T: View>: View, Equatable {
     let chapter: AidokuRunner.Chapter
     let read: Bool
     let page: Int?
+    let totalPages: Int?
+    let alwaysShowPageCount: Bool
+    let fallbackThumbnail: String?
     let downloadStatus: DownloadStatus
     let downloadProgress: Float?
     let displayMode: ChapterTitleDisplayMode
     let isEditing: Bool
+    let loadPageCount: (() async -> Void)?
 
     var onPressed: (() -> Void)?
     var contextMenu: (() -> T)?
@@ -831,10 +856,18 @@ private struct ChapterCellView<T: View>: View, Equatable {
                 chapter: chapter,
                 read: read,
                 page: page,
+                totalPages: totalPages,
+                alwaysShowPageCount: alwaysShowPageCount,
+                fallbackThumbnail: fallbackThumbnail,
                 downloadStatus: downloadStatus,
                 downloadProgress: downloadProgress,
                 displayMode: displayMode
             )
+        }
+        .task(id: chapter.key) {
+            if alwaysShowPageCount, totalPages == nil {
+                await loadPageCount?()
+            }
         }
         if isEditing {
             view
@@ -857,6 +890,9 @@ private struct ChapterCellView<T: View>: View, Equatable {
         lhs.chapter == rhs.chapter
             && lhs.read == rhs.read
             && lhs.page == rhs.page
+            && lhs.totalPages == rhs.totalPages
+            && lhs.alwaysShowPageCount == rhs.alwaysShowPageCount
+            && lhs.fallbackThumbnail == rhs.fallbackThumbnail
             && lhs.downloadStatus == rhs.downloadStatus
             && lhs.downloadProgress == rhs.downloadProgress
             && lhs.displayMode == rhs.displayMode

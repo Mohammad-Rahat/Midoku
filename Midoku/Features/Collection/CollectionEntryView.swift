@@ -153,19 +153,45 @@ struct MCEntryView: View {
             HStack(alignment: .top, spacing: 16) {
                 MCEntryCover(entry: entry).frame(width: 88, height: 132).clipShape(RoundedRectangle(cornerRadius: 9))
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(store.library.title(entry)).font(.title3.bold()).lineLimit(4)
-                    Text(entry.authorOverride ?? store.library.listing(entry.primaryListingID)?.details.authors?.joined(separator: ", ") ?? "").font(.subheadline).foregroundStyle(.secondary)
+                    let title = store.library.title(entry)
+                    Text(title)
+                        .font(.title3.bold())
+                        .lineLimit(4)
+                        .contentShape(Rectangle())
+                        .onTapGesture { copy(title) }
+                        .onLongPressGesture { search(title) }
+                    let creators = entry.authorOverride
+                        ?? store.library.listing(entry.primaryListingID)?.details.authors?.joined(separator: ", ")
+                        ?? store.library.listing(entry.primaryListingID)?.details.artists?.joined(separator: ", ")
+                        ?? ""
+                    if !creators.isEmpty {
+                        Text(creators)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .contentShape(Rectangle())
+                            .onTapGesture { copy(creators) }
+                            .onLongPressGesture { search(creators) }
+                    }
                     Text("\(entry.status.title) · \(entry.links.count) sources").font(.caption).foregroundStyle(.secondary)
                     if !store.library.description(entry).isEmpty {
                         Text(store.library.description(entry)).font(.subheadline).foregroundStyle(.secondary).lineLimit(3)
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
-            Button {
-                if let slot = entry.slots.first(where: { !store.library.isRead($0) }) ?? entry.slots.first { open(slot) }
-            } label: {
-                Label("Read", systemImage: "book.fill").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 4)
-            }.buttonStyle(.borderedProminent).disabled(entry.slots.isEmpty)
+            HStack(spacing: 10) {
+                Button {
+                    if let slot = entry.slots.first(where: { !store.library.isRead($0) }) ?? entry.slots.first { open(slot) }
+                } label: {
+                    Label("Read", systemImage: "book.fill").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 4)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(entry.slots.isEmpty)
+
+                Button { confirmRemove = true } label: {
+                    Label("Unsave", systemImage: "bookmark.slash").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 4)
+                }
+                .buttonStyle(.bordered)
+            }
             if !store.library.clipboard.isEmpty {
                 Button("Paste \(store.library.clipboard.count) copied chapters", systemImage: "doc.on.clipboard") { showPaste = true }.font(.subheadline)
             }
@@ -271,6 +297,15 @@ struct MCEntryView: View {
     private func copySelected() {
         let items = entry?.slots.filter { selected.contains($0.id) }.compactMap(\.preferred).map { MCCopiedChapter(chapterID: $0.chapterID, edits: $0.edits) } ?? []
         store.perform { try $0.library.copy(items) }
+    }
+
+    private func copy(_ value: String) {
+        UIPasteboard.general.string = value
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    private func search(_ value: String) {
+        (UIApplication.shared.firstKeyWindow?.rootViewController as? TabBarController)?.search(for: value)
     }
 }
 

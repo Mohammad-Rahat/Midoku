@@ -351,6 +351,8 @@ extension SettingsView {
             LayoutSettingView()
         } else if setting.key == AppSettings.appearance.accent.key {
             MidokuAccentSettingView()
+        } else if setting.key == "Appearance.libraryLayout" {
+            MidokuLibraryLayoutSettingView()
         } else if setting.key == "Appearance.chapterLayout" {
             MidokuChapterLayoutSettingView()
         } else if setting.key == AppSettings.library.defaultCategory.key {

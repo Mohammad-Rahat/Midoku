@@ -7,25 +7,47 @@ enum ChapterGridStyle: String, SettingsValue, CaseIterable {
     }
 }
 
-enum MidokuAccent: String, SettingsValue, CaseIterable {
-    case forest, slate, ochre, blue, purple, rose
-    var title: String { rawValue.capitalized }
-    var uiColor: UIColor {
-        let choice = self
-        return UIColor { traits in
-            let dark = traits.userInterfaceStyle == .dark
-            switch choice {
-            case .forest: return UIColor(red: dark ? 0.61 : 0.216, green: dark ? 0.78 : 0.416, blue: dark ? 0.67 : 0.314, alpha: 1)
-            case .slate: return UIColor(red: dark ? 0.67 : 0.27, green: dark ? 0.77 : 0.38, blue: dark ? 0.86 : 0.47, alpha: 1)
-            case .ochre: return UIColor(red: dark ? 0.88 : 0.49, green: dark ? 0.74 : 0.34, blue: dark ? 0.50 : 0.17, alpha: 1)
-            case .blue: return .systemBlue
-            case .purple: return .systemPurple
-            case .rose: return .systemPink
-            }
+enum MidokuAccent {
+    static let defaultHex = "#376A50"
+
+    static func uiColor(_ storedValue: String) -> UIColor {
+        let value = migratedHex(storedValue)
+        let hex = value.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        guard hex.count == 6, let number = UInt64(hex, radix: 16) else {
+            return uiColor(defaultHex)
+        }
+        return UIColor(
+            red: CGFloat((number >> 16) & 0xFF) / 255,
+            green: CGFloat((number >> 8) & 0xFF) / 255,
+            blue: CGFloat(number & 0xFF) / 255,
+            alpha: 1
+        )
+    }
+
+    static func hex(_ color: Color) -> String {
+        let value = UIColor(color).resolvedColor(with: UITraitCollection(userInterfaceStyle: .light))
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        guard value.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return defaultHex }
+        return String(format: "#%02X%02X%02X", Int(red * 255), Int(green * 255), Int(blue * 255))
+    }
+
+    private static func migratedHex(_ value: String) -> String {
+        switch value.lowercased() {
+        case "forest": defaultHex
+        case "slate": "#456178"
+        case "ochre": "#7D572B"
+        case "blue": "#007AFF"
+        case "purple": "#AF52DE"
+        case "rose": "#FF2D55"
+        default: value
         }
     }
+
     @MainActor static func applyToWindows() {
-        let color = AppSettings.appearance.accent.get().uiColor
+        let color = uiColor(AppSettings.appearance.accent.get())
         for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
             for window in scene.windows { window.tintColor = color }
         }
@@ -33,9 +55,10 @@ enum MidokuAccent: String, SettingsValue, CaseIterable {
 }
 
 private struct MidokuAccentModifier: ViewModifier {
-    @AppStorage("Appearance.accent") private var accent = MidokuAccent.forest
+    @AppStorage("Appearance.accent") private var accent = MidokuAccent.defaultHex
     func body(content: Content) -> some View {
-        content.tint(Color(uiColor: accent.uiColor)).accentColor(Color(uiColor: accent.uiColor))
+        let color = Color(uiColor: MidokuAccent.uiColor(accent))
+        content.tint(color).accentColor(color)
     }
 }
 

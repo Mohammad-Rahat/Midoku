@@ -211,6 +211,9 @@ extension Settings {
                 )
             ]))
         ),
+        .init(title: "Library", value: .group(.init(items: [
+            .init(key: "Appearance.libraryLayout", title: "Library layout", value: .custom)
+        ]))),
         .init(title: "Chapters", value: .group(.init(items: [
             .init(key: "Appearance.chapterLayout", title: "Chapter layout", value: .custom)
         ])))

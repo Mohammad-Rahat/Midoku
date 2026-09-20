@@ -211,6 +211,35 @@ final class MCCollectionStore {
         }
     }
 
+    func addChapter(_ chapter: AidokuRunner.Chapter, from manga: AidokuRunner.Manga, to entryID: UUID, title: String) throws {
+        let sourceName = SourceStore.shared.source(for: manga.sourceKey)?.name ?? manga.sourceKey
+        let displayTitle = chapter.formattedTitle()
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else { throw MCLibraryFailure.emptyTitle }
+
+        try change { state in
+            let listingID = try state.remember(manga, chapters: [chapter], sourceName: sourceName, complete: false)
+            guard
+                let listing = state.library.listing(listingID),
+                let chapterID = state.library.chapters.first(where: {
+                    $0.identity.listing == listing.identity && $0.record.id == chapter.key
+                })?.id,
+                let entry = state.library.entry(entryID)
+            else { throw MCLibraryFailure.missing }
+
+            let existingClipboard = state.library.clipboard
+            let edits = MCChapterEdits(title: trimmedTitle == displayTitle ? nil : trimmedTitle)
+            let item = MCCopiedChapter(chapterID: chapterID, edits: edits)
+            guard var choice = try state.library.pastePreview(entryID: entryID, items: [item]).first else {
+                throw MCLibraryFailure.missing
+            }
+            guard choice.action != .skip else { return }
+            choice.action = .separate
+            try state.library.paste(entryID: entryID, revision: entry.sequenceRevision, choices: [choice])
+            state.library.clipboard = existingClipboard
+        }
+    }
+
     @discardableResult
     func removeEntries(_ ids: Set<UUID>) -> Bool {
         let removedListings = Set(library.entries.filter { ids.contains($0.id) }.compactMap(\.primaryListingID))

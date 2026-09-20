@@ -2,6 +2,92 @@ import AidokuRunner
 import PhotosUI
 import SwiftUI
 
+struct MCAddChapterToEntryView: View {
+    let manga: AidokuRunner.Manga
+    let chapter: AidokuRunner.Chapter
+    @State private var store = MCCollectionStore.shared
+    @State private var chapterName = ""
+    @State private var query = ""
+    @State private var selectedEntryID: UUID?
+    @State private var loaded = false
+    @Environment(\.dismiss) private var dismiss
+
+    private var entries: [MCPersonalEntry] {
+        store.library.entries
+            .filter { query.isEmpty || store.library.title($0).localizedCaseInsensitiveContains(query) }
+            .sorted { store.library.title($0).localizedStandardCompare(store.library.title($1)) == .orderedAscending }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Chapter") {
+                    TextField("Chapter name", text: $chapterName)
+                }
+
+                Section("Library entry") {
+                    if entries.isEmpty {
+                        ContentUnavailableView(
+                            query.isEmpty ? "Library empty" : "No entries found",
+                            systemImage: "books.vertical",
+                            description: Text(query.isEmpty ? "Save an entry to the Library first." : "Try another search.")
+                        )
+                    } else {
+                        ForEach(entries) { entry in
+                            Button {
+                                selectedEntryID = entry.id
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(store.library.title(entry)).foregroundStyle(.primary).lineLimit(2)
+                                        Text("\(entry.slots.count) chapters · \(entry.status.title)")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    if selectedEntryID == entry.id {
+                                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
+                                    }
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search library")
+            .navigationTitle("Add to entry")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") { add() }
+                        .disabled(selectedEntryID == nil || chapterName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .onAppear {
+                guard !loaded else { return }
+                loaded = true
+                chapterName = chapter.formattedTitle()
+                selectedEntryID = store.entryID(for: manga)
+            }
+            .mcErrors(store)
+        }
+        .midokuAccent()
+    }
+
+    private func add() {
+        guard let selectedEntryID else { return }
+        do {
+            try store.addChapter(chapter, from: manga, to: selectedEntryID, title: chapterName)
+            dismiss()
+        } catch {
+            store.error = error.localizedDescription
+        }
+    }
+}
+
 struct MCPasteView: View {
     let entryID: UUID
     @State private var store = MCCollectionStore.shared

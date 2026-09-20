@@ -312,14 +312,26 @@ extension AidokuRunner.Chapter {
         }
     }
 
-    func formattedSubtitle(page: Int?, sourceKey: String) -> String? {
+    func formattedSubtitle(page: Int?, totalPages: Int? = nil, alwaysShowPageCount: Bool = false, sourceKey: String) -> String? {
         var components: [String] = []
         // date
         if let dateUploaded {
             components.append(makeRelativeDate(for: dateUploaded))
         }
-        // page (if reading in progress)
-        if let page, page > 0 {
+        // reading progress and total page count
+        if alwaysShowPageCount {
+            if let totalPages, totalPages > 0 {
+                if let page, page > 0 {
+                    components.append(String(format: NSLocalizedString("PAGE_X_OF_X"), page, totalPages))
+                } else {
+                    components.append(String(format: NSLocalizedString("%i_PAGES"), totalPages))
+                }
+            } else if totalPages == 0 {
+                components.append("Pages unavailable")
+            } else {
+                components.append("Loading pages…")
+            }
+        } else if let page, page > 0 {
             components.append(String(format: NSLocalizedString("PAGE_X"), page))
         }
         // scanlator

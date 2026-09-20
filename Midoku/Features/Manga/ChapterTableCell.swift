@@ -14,6 +14,9 @@ struct ChapterTableCell: View {
     let chapter: AidokuRunner.Chapter
     let read: Bool
     let page: Int?
+    let totalPages: Int?
+    let alwaysShowPageCount: Bool
+    let fallbackThumbnail: String?
     let downloadStatus: DownloadStatus
     var downloadProgress: Float?
     let displayMode: ChapterTitleDisplayMode
@@ -37,13 +40,14 @@ struct ChapterTableCell: View {
 
     var body: some View {
         let view = HStack {
-            if let thumbnail = chapter.thumbnail {
+            if let thumbnail = chapter.thumbnail ?? (alwaysShowPageCount ? fallbackThumbnail : nil) {
                 MangaCoverView(
                     source: source,
                     coverImage: thumbnail,
                     width: 40,
-                    height: 40
+                    height: 56
                 )
+                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
             }
 
             VStack(alignment: .leading, spacing: 8 / 3) {
@@ -52,7 +56,12 @@ struct ChapterTableCell: View {
                     .foregroundStyle(locked || read ? .secondary : .primary)
                     .font(.system(size: 16))
                     .lineLimit(1)
-                if let subtitle = chapter.formattedSubtitle(page: page, sourceKey: sourceKey) {
+                if let subtitle = chapter.formattedSubtitle(
+                    page: page,
+                    totalPages: totalPages,
+                    alwaysShowPageCount: alwaysShowPageCount,
+                    sourceKey: sourceKey
+                ) {
                     Text(subtitle)
                         .foregroundStyle(.secondary)
                         .font(.system(size: 14))

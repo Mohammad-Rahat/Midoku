@@ -23,9 +23,9 @@ struct MCCollectionRootView: View {
     @State private var showAddPreview = false
     @AppStorage("Midoku.collectionGrid") private var grid = true
     @AppStorage("Midoku.chapterGrid") private var chapterGrid = false
-    @AppStorage("Appearance.layout") private var layout = AppearanceSettings.Layout.standard
-    @AppStorage("Appearance.customPortraitRows") private var portraitColumns = UIDevice.current.userInterfaceIdiom == .pad ? 5 : 2
-    @AppStorage("Appearance.customLandscapeRows") private var landscapeColumns = UIDevice.current.userInterfaceIdiom == .pad ? 6 : 4
+    @AppStorage("Appearance.libraryGridStyle") private var gridStyle = ChapterGridStyle.standard
+    @AppStorage("Appearance.libraryPortraitColumns") private var portraitColumns = 3
+    @AppStorage("Appearance.libraryLandscapeColumns") private var landscapeColumns = 5
 
     private func entries(in category: UUID?) -> [MCPersonalEntry] {
         store.library.entries.filter { entry in
@@ -156,15 +156,7 @@ struct MCCollectionRootView: View {
     }
 
     private func columns(for size: CGSize) -> [GridItem] {
-        let count: Int
-        if !grid { count = 1 }
-        else {
-            switch layout {
-            case .standard: count = max(1, Int(size.width / 180))
-            case .compact: count = max(1, Int(size.width / (UIDevice.current.userInterfaceIdiom == .pad ? 150 : 120)))
-            case .custom: count = max(1, size.width > size.height ? landscapeColumns : portraitColumns)
-            }
-        }
+        let count = grid ? (size.width > size.height ? min(10, max(2, landscapeColumns)) : min(6, max(2, portraitColumns))) : 1
         return Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: count)
     }
 
@@ -190,6 +182,7 @@ struct MCCollectionRootView: View {
                                 }
                             }
                         }.buttonStyle(.plain)
+                        .accessibilityLabel("\(store.library.title(entry)), \(entry.slots.count) chapters, \(entry.status.title)")
                         .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 10))
                         .contextMenu {
                             Button("Edit entry", systemImage: "pencil") { editingEntry = MCID(id: entry.id) }
@@ -217,13 +210,31 @@ struct MCCollectionRootView: View {
     @ViewBuilder private func entryLabel(_ entry: MCPersonalEntry) -> some View {
         if grid {
             VStack(alignment: .leading, spacing: 7) {
-                MCEntryCover(entry: entry).aspectRatio(2/3, contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: 10))
-                Text(store.library.title(entry)).font(.subheadline.weight(.semibold)).lineLimit(2, reservesSpace: true).frame(maxWidth: .infinity, alignment: .leading)
-                Text("\(entry.slots.count) chapters · \(entry.status.title)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                MCEntryCover(entry: entry)
+                    .aspectRatio(2/3, contentMode: .fit)
+                    .overlay(alignment: .bottomLeading) {
+                        if gridStyle == .compact {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(store.library.title(entry)).font(.caption.weight(.semibold)).lineLimit(2)
+                                Text("\(entry.slots.count) chapters").font(.caption2).opacity(0.85).lineLimit(1)
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.top, 28)
+                            .padding(.bottom, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(LinearGradient(colors: [.clear, .black.opacity(0.88)], startPoint: .top, endPoint: .bottom))
+                        }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: gridStyle == .clean ? 6 : 10))
+                if gridStyle == .standard {
+                    Text(store.library.title(entry)).font(.subheadline.weight(.semibold)).lineLimit(2, reservesSpace: true).frame(maxWidth: .infinity, alignment: .leading)
+                    Text("\(entry.slots.count) chapters · \(entry.status.title)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
             }
         } else {
             HStack(spacing: 14) {
-                MCEntryCover(entry: entry).frame(width: layout == .compact ? 48 : 66, height: layout == .compact ? 72 : 99).clipShape(RoundedRectangle(cornerRadius: 8))
+                MCEntryCover(entry: entry).frame(width: 66, height: 99).clipShape(RoundedRectangle(cornerRadius: 8))
                 VStack(alignment: .leading, spacing: 6) {
                     Text(store.library.title(entry)).font(.headline).lineLimit(2)
                     Text(entry.status.title).font(.subheadline).foregroundStyle(.secondary)
