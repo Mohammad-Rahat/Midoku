@@ -1,8 +1,8 @@
-name: Midoku merged IPA
+name: Midoku IPA
 
 on:
   push:
-    branches: [midoku-aidoku-merge]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
