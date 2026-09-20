@@ -193,6 +193,21 @@ struct MCEntryView: View {
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
+            let tags = entryTags(entry)
+            if !tags.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(tags, id: \.self) { tag in
+                            Text(tag)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 7)
+                                .background(Color(uiColor: .secondarySystemFill), in: Capsule())
+                        }
+                    }
+                }
+            }
             HStack(spacing: 10) {
                 Button {
                     if let slot = entry.slots.first(where: { !store.library.isRead($0) }) ?? entry.slots.first { open(slot) }
@@ -207,6 +222,15 @@ struct MCEntryView: View {
                 }
                 .buttonStyle(.bordered)
             }
+        }
+    }
+
+    private func entryTags(_ entry: MCPersonalEntry) -> [String] {
+        var seen = Set<String>()
+        let listingIDs = [entry.primaryListingID].compactMap { $0 } + entry.links.map(\.listingID)
+        return listingIDs.compactMap { store.library.listing($0)?.details.tags }.flatMap { $0 }.filter { tag in
+            let key = tag.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            return seen.insert(key).inserted
         }
     }
 

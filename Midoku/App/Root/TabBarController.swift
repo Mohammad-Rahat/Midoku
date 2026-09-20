@@ -24,6 +24,9 @@ class TabBarController: UITabBarController {
     private let searchController = SearchViewController()
     private var appLockOverlay: UIView?
     private var appLockButton: UIButton?
+    private var appSwitcherBlurOverlay: UIVisualEffectView?
+    private var appBackgroundedAt: Date?
+    private var hasAuthenticatedAppLock = false
     private var unlockingApp = false
 
     private lazy var libraryProgressView = CircularProgressView(frame: CGRect(x: 0, y: 0, width: 20, height: 20))
@@ -204,20 +207,37 @@ class TabBarController: UITabBarController {
 
         NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)
             .sink { [weak self] _ in
-                if AppSettings.general.appLock.get() { self?.showAppLock() }
+                self?.handleAppWillResignActive()
             }
             .store(in: &cancellables)
 
+        NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
+            .sink { [weak self] _ in
+                guard AppSettings.general.appLock.get() else { return }
+                self?.appBackgroundedAt = Date()
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)
+            .sink { [weak self] _ in self?.prepareAppLockForForeground() }
+            .store(in: &cancellables)
+
         NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
-            .sink { [weak self] _ in self?.unlockAppIfNeeded() }
+            .sink { [weak self] _ in
+                self?.hideAppSwitcherBlur()
+                self?.unlockAppIfNeeded()
+            }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .init(AppSettings.general.appLock.key))
             .sink { [weak self] _ in
                 if AppSettings.general.appLock.get() {
+                    self?.hasAuthenticatedAppLock = false
                     self?.showAppLock()
                     self?.unlockAppIfNeeded()
                 } else {
+                    self?.hasAuthenticatedAppLock = false
+                    self?.appBackgroundedAt = nil
                     self?.hideAppLock()
                 }
             }
@@ -227,7 +247,7 @@ class TabBarController: UITabBarController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        if AppSettings.general.appLock.get() {
+        if AppSettings.general.appLock.get(), !hasAuthenticatedAppLock {
             showAppLock()
             unlockAppIfNeeded()
         }
@@ -262,6 +282,50 @@ class TabBarController: UITabBarController {
 }
 
 private extension TabBarController {
+    func handleAppWillResignActive() {
+        guard AppSettings.general.appLock.get() else { return }
+        if AppSettings.general.appLockDelay.get().seconds == 0 {
+            hasAuthenticatedAppLock = false
+            showAppLock()
+        }
+        if AppSettings.general.blurAppSwitcher.get() { showAppSwitcherBlur() }
+    }
+
+    func prepareAppLockForForeground() {
+        defer { appBackgroundedAt = nil }
+        guard AppSettings.general.appLock.get(), hasAuthenticatedAppLock else {
+            if AppSettings.general.appLock.get() { showAppLock() }
+            return
+        }
+        guard let appBackgroundedAt else { return }
+        let delay = AppSettings.general.appLockDelay.get().seconds
+        if Date().timeIntervalSince(appBackgroundedAt) >= delay {
+            hasAuthenticatedAppLock = false
+            showAppLock()
+        }
+    }
+
+    func showAppSwitcherBlur() {
+        guard appSwitcherBlurOverlay == nil,
+              let container = view.window ?? UIApplication.shared.firstKeyWindow else { return }
+        let overlay = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
+        overlay.translatesAutoresizingMaskIntoConstraints = false
+        overlay.contentView.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.3)
+        container.addSubview(overlay)
+        NSLayoutConstraint.activate([
+            overlay.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            overlay.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            overlay.topAnchor.constraint(equalTo: container.topAnchor),
+            overlay.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+        ])
+        appSwitcherBlurOverlay = overlay
+    }
+
+    func hideAppSwitcherBlur() {
+        appSwitcherBlurOverlay?.removeFromSuperview()
+        appSwitcherBlurOverlay = nil
+    }
+
     func showAppLock() {
         guard appLockOverlay == nil, let container = view.window ?? UIApplication.shared.firstKeyWindow else { return }
 
@@ -348,7 +412,10 @@ private extension TabBarController {
                     .defaultPolicy,
                     localizedReason: "Unlock Midoku"
                 )
-                if success { self.hideAppLock() }
+                if success {
+                    self.hasAuthenticatedAppLock = true
+                    self.hideAppLock()
+                }
             } catch {
                 // Keep the lock screen visible so the user can retry.
             }

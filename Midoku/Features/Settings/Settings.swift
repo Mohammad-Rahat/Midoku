@@ -55,6 +55,21 @@ enum Settings {
                     subtitle: "Require Face ID, Touch ID, or the device passcode to open Midoku.",
                     authToDisable: true
                 ))
+            ),
+            .init(
+                key: AppSettings.general.appLockDelay.key,
+                title: "Require authentication",
+                requires: AppSettings.general.appLock.key,
+                value: .select(.init(
+                    values: GeneralSettings.AppLockDelay.allCases.map(\.rawValue),
+                    titles: GeneralSettings.AppLockDelay.allCases.map(\.title)
+                ))
+            ),
+            .init(
+                key: AppSettings.general.blurAppSwitcher.key,
+                title: "Blur in app switcher",
+                requires: AppSettings.general.appLock.key,
+                value: .toggle(.init(subtitle: "Hide Midoku’s content in the app switcher."))
             )
         ]))),
         .init(value: .group(.init(items: [

@@ -488,7 +488,6 @@ struct MCCollectionRootView: View {
                     Text(store.library.title(entry)).font(.subheadline.weight(.semibold)).lineLimit(2, reservesSpace: true).frame(maxWidth: .infinity, alignment: .leading)
                     Text("\(entry.slots.count) chapters · \(entry.status.title)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
-                entryTagRow(entry)
             }
         } else {
             HStack(spacing: 14) {
@@ -497,27 +496,9 @@ struct MCCollectionRootView: View {
                     Text(store.library.title(entry)).font(.headline).lineLimit(2)
                     Text(entry.status.title).font(.subheadline).foregroundStyle(.secondary)
                     Text("\(entry.slots.count) chapters · \(entry.links.count) sources").font(.caption).foregroundStyle(.secondary)
-                    entryTagRow(entry)
                 }
                 Spacer()
             }
-        }
-    }
-
-    @ViewBuilder private func entryTagRow(_ entry: MCPersonalEntry) -> some View {
-        let values = entryTags(entry)
-        if !values.isEmpty {
-            HStack(spacing: 5) {
-                ForEach(Array(values.prefix(2)), id: \.self) { tag in
-                    Text(tag).font(.caption2.weight(.medium)).lineLimit(1)
-                        .padding(.horizontal, 6).padding(.vertical, 3)
-                        .foregroundStyle(Color.accentColor)
-                        .background(Color.accentColor.opacity(0.11), in: Capsule())
-                }
-                if values.count > 2 {
-                    Text("+\(values.count - 2)").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
-                }
-            }.frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
