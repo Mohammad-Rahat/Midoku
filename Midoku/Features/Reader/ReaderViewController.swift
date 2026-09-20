@@ -146,6 +146,15 @@ class ReaderViewController: BaseObservingViewController {
             constant: -16
         )
 
+    private lazy var accessoryBottomWithControls = [
+        descriptionButtonController.view.bottomAnchor.constraint(equalTo: controlsView.topAnchor, constant: -8),
+        autoScrollButton.bottomAnchor.constraint(equalTo: controlsView.topAnchor, constant: -8)
+    ]
+    private lazy var accessoryBottomFullscreen = [
+        descriptionButtonController.view.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+        autoScrollButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
+    ]
+
     private var barToggleTapGesture: UITapGestureRecognizer?
     private var barToggleSecondaryTapGesture: UITapGestureRecognizer?
     private var barDismissNavigationBarTapGesture: UITapGestureRecognizer?
@@ -270,12 +279,9 @@ class ReaderViewController: BaseObservingViewController {
 
         NSLayoutConstraint.activate([
             activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-
-            descriptionButtonController.view.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
-
-            autoScrollButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
+            activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
+        NSLayoutConstraint.activate(accessoryBottomWithControls)
 
         updateAutoScrollButton()
     }
@@ -1551,12 +1557,15 @@ extension ReaderViewController {
         navigationController?.setNavigationBarHidden(true, animated: false)
         navigationController?.isToolbarHidden = true
         controlsView.isUserInteractionEnabled = visible
+        NSLayoutConstraint.deactivate(visible ? accessoryBottomFullscreen : accessoryBottomWithControls)
+        NSLayoutConstraint.activate(visible ? accessoryBottomWithControls : accessoryBottomFullscreen)
         if visible { controlsView.isHidden = false }
         setNeedsStatusBarAppearanceUpdate()
         setNeedsUpdateOfHomeIndicatorAutoHidden()
         NotificationCenter.default.post(name: visible ? .readerShowingBars : .readerHidingBars, object: nil)
         UIView.animate(withDuration: animated ? 0.2 : 0, delay: 0, options: [.beginFromCurrentState]) {
             self.controlsView.alpha = visible ? 1 : 0
+            self.view.layoutIfNeeded()
             self.node.backgroundColor = visible ? .systemBackground : {
                 switch UserDefaults.standard.string(forKey: "Reader.backgroundColor") {
                 case "system": UIColor.systemBackground
