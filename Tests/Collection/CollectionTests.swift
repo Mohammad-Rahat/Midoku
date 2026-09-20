@@ -121,4 +121,13 @@ struct CollectionTests {
         #expect(state.entry(id)?.slots.last?.preferred?.edits.number == "30")
     }
 
+    @Test func chapterLayoutOverrideDefaultsToInheritanceAndPersists() throws {
+        var state = MCLibraryState()
+        let id = try state.add(details: details(), connectionID: a, records: records([1]), language: nil)
+        #expect(state.entry(id)?.chapterGridOverride == nil)
+        try state.editEntry(id) { $0.chapterGridOverride = false }
+        let reloaded = try JSONDecoder().decode(MCLibraryState.self, from: JSONEncoder().encode(state))
+        #expect(reloaded.entry(id)?.chapterGridOverride == false)
+    }
+
 }

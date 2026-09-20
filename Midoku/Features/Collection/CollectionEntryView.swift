@@ -16,12 +16,21 @@ struct MCEntryView: View {
     @State private var confirmRemove = false
     @State private var confirmReset = false
     @State private var confirmRemoveChapters = false
-    @AppStorage("Midoku.chapterGrid") private var grid = false
+    @AppStorage("Midoku.chapterGrid") private var defaultChapterGrid = false
     @AppStorage("Appearance.chapterGridStyle") private var gridStyle = ChapterGridStyle.standard
     @AppStorage("Appearance.chapterPortraitColumns") private var portraitColumns = 3
     @AppStorage("Appearance.chapterLandscapeColumns") private var landscapeColumns = 5
     @State private var viewportSize = CGSize.zero
     private var entry: MCPersonalEntry? { store.library.entry(entryID) }
+    private var grid: Bool { entry?.chapterGridOverride ?? defaultChapterGrid }
+    private var chapterGridOverride: Binding<Bool?> {
+        Binding(
+            get: { entry?.chapterGridOverride },
+            set: { value in
+                store.perform { try $0.library.editEntry(entryID) { $0.chapterGridOverride = value } }
+            }
+        )
+    }
     private var slots: [MCChapterSlot] {
         guard let entry else { return [] }
         return entry.descendingDisplay ? Array(entry.slots.reversed()) : entry.slots
@@ -60,7 +69,11 @@ struct MCEntryView: View {
                             Button("Edit entry", systemImage: "square.and.pencil") { showEdit = true }
                             Button("Reset edits", systemImage: "arrow.counterclockwise") { confirmReset = true }
                             Button("Sources and alternatives", systemImage: "square.stack.3d.up") { showSources = true }
-                            Toggle("Chapter grid", isOn: $grid)
+                            Picker("Chapter layout", selection: chapterGridOverride) {
+                                Text("Use appearance setting").tag(Bool?.none)
+                                Text("Grid").tag(Bool?.some(true))
+                                Text("List").tag(Bool?.some(false))
+                            }
                             Button("Reorder chapters", systemImage: "line.3.horizontal") { selecting = false; showReorder = true }
                             if entry.manualOrder {
                                 Button("Restore chapter-number order") { store.perform { try $0.library.editEntry(entryID) { $0.manualOrder = false } } }
@@ -101,7 +114,7 @@ struct MCEntryView: View {
             let args = ProcessInfo.processInfo.arguments
             if args.contains("--collection-preview") { try? await Task.sleep(for: .milliseconds(750)) }
             if args.contains("--edit-preview") { showEdit = true }
-            if args.contains("--chapter-selection-preview") { grid = true; selecting = true; selected = Set(slots.prefix(2).map(\.id)) }
+            if args.contains("--chapter-selection-preview") { defaultChapterGrid = true; selecting = true; selected = Set(slots.prefix(2).map(\.id)) }
             #endif
         }
         .task {
@@ -224,7 +237,7 @@ struct MCEntryView: View {
                 }
                 Button("Remove from entry", role: .destructive) { store.perform { try $0.library.removeSlots(entryID: entryID, slotIDs: [slot.id]) } }
         } preview: {
-            chapterLabel(slot, grid: true).padding(12).frame(width: 220).background(Color(uiColor: .systemBackground))
+            chapterLabel(slot, grid: grid).padding(12).frame(width: 220).background(Color(uiColor: .systemBackground))
         }
     }
 
@@ -253,7 +266,11 @@ struct MCEntryView: View {
                 .accessibilityAddTraits(selected.contains(slot.id) ? .isSelected : [])
         } else {
             HStack(spacing: 12) {
-                MCChapterThumbnail(variant: slot.preferred).frame(width: 48, height: 72).clipShape(RoundedRectangle(cornerRadius: 6))
+                if let entry {
+                    MCChapterListArtwork(entry: entry, variant: slot.preferred)
+                        .frame(width: 48, height: 72)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
                 chapterText(slot, compact: false)
                 Spacer(minLength: 0)
                 if selecting { selectionMark(slot) }

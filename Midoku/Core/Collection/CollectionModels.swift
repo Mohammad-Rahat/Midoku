@@ -74,6 +74,8 @@ nonisolated struct MCPersonalEntry: Codable, Identifiable, Sendable {
     var sequenceRevision = 0
     var readerOverride: MCReaderPreferences?
     var descendingDisplay = false
+    /// nil follows the app-wide Appearance setting; otherwise this entry uses its own layout.
+    var chapterGridOverride: Bool?
 }
 
 /// Bounded, normalized JPEG/PNG bytes travel with the transactional backup; no arbitrary paths.

@@ -214,7 +214,7 @@ struct HistoryView: View {
 
     // open the most recently read manga, resuming from the chapter it left off on
     func continueReading() async {
-        guard !locked, !openingLastRead else { return }
+        guard !openingLastRead else { return }
         openingLastRead = true
         defer { openingLastRead = false }
 

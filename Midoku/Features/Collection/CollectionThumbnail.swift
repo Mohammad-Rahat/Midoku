@@ -16,11 +16,20 @@ final class MCThumbnailCache {
 
     init() { cache.totalCostLimit = 16 * 1024 * 1024 }
 
-    func image(chapter: MCLibraryChapter, store: MCCollectionStore) async -> UIImage? {
-        let key = chapter.id.uuidString as NSString
+    /// Returns an existing generated thumbnail without starting any source or image requests.
+    func cachedImage(chapterID: UUID) -> UIImage? {
+        let key = chapterID.uuidString as NSString
         if let cached = cache.object(forKey: key) { return cached }
+        let file = directory.appendingPathComponent(chapterID.uuidString + ".jpg")
+        guard let data = try? Data(contentsOf: file), let image = UIImage(data: data) else { return nil }
+        cache.setObject(image, forKey: key, cost: data.count)
+        return image
+    }
+
+    func image(chapter: MCLibraryChapter, store: MCCollectionStore) async -> UIImage? {
+        if let cached = cachedImage(chapterID: chapter.id) { return cached }
+        let key = chapter.id.uuidString as NSString
         let file = directory.appendingPathComponent(chapter.id.uuidString + ".jpg")
-        if let data = try? Data(contentsOf: file), let image = UIImage(data: data) { cache.setObject(image, forKey: key, cost: data.count); return image }
         if let task = tasks[chapter.id] { return await task.value }
         guard let physical = store.physical(chapter.identity) else { return nil }
         let task = Task<UIImage?, Never> { [self] in
@@ -70,6 +79,62 @@ final class MCThumbnailCache {
         let image = await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
         tasks[chapter.id] = nil
         return image
+    }
+}
+
+/// List rows never fetch chapter artwork. They reuse a local/generated or in-memory source
+/// thumbnail when one already exists, and otherwise fall back to the entry cover.
+struct MCChapterListArtwork: View {
+    let entry: MCPersonalEntry
+    let variant: MCChapterVariant?
+    @State private var store = MCCollectionStore.shared
+    @State private var cachedSourceImage: UIImage?
+
+    private var chapter: MCLibraryChapter? { variant.flatMap { store.library.chapter($0.chapterID) } }
+    private var customImage: UIImage? {
+        guard let id = variant?.edits.coverID, let data = store.library.covers.first(where: { $0.id == id })?.data else { return nil }
+        return UIImage(data: data)
+    }
+    private var generatedImage: UIImage? {
+        chapter.flatMap { MCThumbnailCache.shared.cachedImage(chapterID: $0.id) }
+    }
+
+    var body: some View {
+        Group {
+            if let image = customImage ?? generatedImage ?? cachedSourceImage {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else {
+                MCEntryCover(entry: entry)
+            }
+        }
+        .clipped()
+        .task(id: variant?.chapterID) {
+            cachedSourceImage = nil
+            guard customImage == nil, generatedImage == nil, let chapter,
+                  let thumbnail = store.snapshot.chapters.first(where: { $0.chapterID == chapter.id })?.chapter.thumbnail else { return }
+            cachedSourceImage = await existingSourceImage(thumbnail, chapter: chapter)
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func existingSourceImage(_ value: String, chapter: MCLibraryChapter) async -> UIImage? {
+        guard let url = URL(string: value) else { return nil }
+        let request: ImageRequest
+        if let fileURL = url.toMidokuFileUrl() {
+            request = ImageRequest(url: fileURL)
+        } else if !url.isFileURL, let source = store.source(chapter.identity.listing.connectionID) {
+            var processors: [ImageProcessing] = []
+            if source.features.processesCovers { processors.append(CoverInterceptorProcessor(source: source)) }
+            request = ImageRequest(
+                urlRequest: await source.getModifiedImageRequest(url: url, context: nil),
+                processors: processors,
+                userInfo: [.processesKey: source.features.processesCovers]
+            )
+        } else {
+            request = ImageRequest(url: url)
+        }
+        guard ImagePipeline.shared.cache.containsCachedImage(for: request) else { return nil }
+        return ImagePipeline.shared.cache.cachedImage(for: request)?.image
     }
 }
 
