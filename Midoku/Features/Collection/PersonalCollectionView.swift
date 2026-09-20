@@ -132,7 +132,7 @@ struct MCCollectionRootView: View {
     private func matchesProgress(_ entry: MCPersonalEntry) -> Bool {
         guard progressFilter != .all else { return true }
         let read = entry.slots.filter { store.library.isRead($0) }.count
-        switch progressFilter {
+        return switch progressFilter {
         case .all: true
         case .notStarted: read == 0
         case .inProgress: read > 0 && read < entry.slots.count
@@ -160,7 +160,7 @@ struct MCCollectionRootView: View {
 
     private func groupTitle(_ entry: MCPersonalEntry) -> String {
         let details = store.library.listing(entry.primaryListingID)?.details
-        switch grouping {
+        return switch grouping {
         case .none: ""
         case .category:
             store.snapshot.categories.first { entry.categoryIDs.contains($0.id) }?.name ?? "Uncategorized"
