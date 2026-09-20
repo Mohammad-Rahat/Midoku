@@ -68,8 +68,8 @@ actor CloudflareHandler: NSObject {
             return visibleViewController(from: presentedViewController)
         }
         if let navigationController = viewController as? UINavigationController {
-            if let visibleViewController = navigationController.visibleViewController {
-                return visibleViewController(from: visibleViewController)
+            if let visibleController = navigationController.visibleViewController {
+                return visibleViewController(from: visibleController)
             }
             return navigationController
         }
