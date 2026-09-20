@@ -65,6 +65,14 @@ extension SourceManager {
         await loadSourcesTask?.value
     }
 
+    #if DEBUG
+    func installPreviewSources(_ sources: [AidokuRunner.Source]) async {
+        await waitForSourcesLoad()
+        for source in sources { sourcesByKey[source.key] = source }
+        await publishSourceState()
+    }
+    #endif
+
     func reloadSources() async {
         sourcesByKey = await getInstalledSources()
         loadSourceLanguages()

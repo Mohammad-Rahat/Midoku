@@ -9,16 +9,19 @@ enum MCCollectionPreview {
     static func prepare() {
         guard ProcessInfo.processInfo.arguments.contains("--collection-preview") else { return }
         let args = ProcessInfo.processInfo.arguments
+        AppSettings.flags.libraryRefreshInProgress.reset()
+        AppSettings.appearance.accent.set(args.contains("--accent-preview") ? .purple : .forest)
+        AppSettings.appearance.chapterGridStyle.set(args.contains("--chapter-compact-preview") ? .compact : args.contains("--chapter-clean-preview") ? .clean : .standard)
         AppSettings.appearance.layout.set(args.contains("--compact-preview") ? .compact : .standard)
         UserDefaults.standard.set(true, forKey: "Midoku.collectionGrid")
-        UserDefaults.standard.set(false, forKey: "Midoku.chapterGrid")
+        UserDefaults.standard.set(args.contains(where: { $0.hasPrefix("--chapter-") }), forKey: "Midoku.chapterGrid")
         let store = MCCollectionStore.shared
         do {
             try store.change { $0 = MCCollectionSnapshot() }
             let a = AidokuRunner.Manga(sourceKey: "preview.a", key: "book", title: "The Paper Lantern",
                 authors: ["Midoku Preview"], description: "An editable edition with chapters collected from different sources.")
             let b = AidokuRunner.Manga(sourceKey: "preview.b", key: "book", title: "The Paper Lantern")
-            let id = try store.add(a, chapters: [20, 22, 23, 24].map { .init(key: "c\($0)", title: "Across the quiet city", chapterNumber: Float($0)) }, status: .reading)
+            let id = try store.add(a, chapters: [20, 22, 23, 24].map { .init(key: "c\($0)", title: $0 == 24 ? nil : "Across the quiet city", chapterNumber: Float($0)) }, status: .reading)
             store.copy(manga: b, chapters: [.init(key: "c21", title: "The missing chapter", chapterNumber: 21)])
             try store.change { state in
                 try state.library.paste(entryID: id, revision: 0, choices: state.library.pastePreview(entryID: id))
@@ -42,16 +45,15 @@ enum MCCollectionPreview {
                 store.copy(manga: b, chapters: [.init(key: "c25", title: "A new beginning", chapterNumber: 25)])
             }
             entryID = id
+            if args.contains("--empty-preview") { try store.change { $0.library.entries.removeAll() } }
         } catch { store.error = error.localizedDescription }
     }
 
     static func installReaderSources() async {
         await SourceManager.shared.waitForSourcesLoad()
-        var sources = SourceStore.shared.sourcesByKey
-        for key in ["preview.a", "preview.b"] {
-            sources[key] = AidokuRunner.Source(url: nil, key: key, name: key, version: 1, languages: ["en"], contentRating: .safe, runner: MCPreviewRunner())
-        }
-        SourceStore.shared.update(sourcesByKey: sources, disabledSourceKeys: SourceStore.shared.disabledSourceKeys)
+        await SourceManager.shared.installPreviewSources(["preview.a", "preview.b"].map { key in
+            AidokuRunner.Source(url: nil, key: key, name: key, version: 1, languages: ["en"], contentRating: .safe, runner: MCPreviewRunner())
+        })
     }
 }
 

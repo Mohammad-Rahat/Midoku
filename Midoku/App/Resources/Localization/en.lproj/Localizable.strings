@@ -56,7 +56,7 @@
 "DOWNLOAD_INCOMPLETE" = "Incomplete Download";
 "TOTAL_DOWNLOADS" = "Total Downloads";
 "%i_SERIES" = "%i series";
-"IN_LIBRARY" = "In Collection";
+"IN_LIBRARY" = "In Library";
 "VIEW_SERIES" = "View Series";
 "VIEW_FILES" = "View Files";
 "COMPRESS_DOWNLOADS" = "Compress Downloads";
@@ -66,14 +66,14 @@
 "METADATA_DETECTED_TEXT" = "Legacy JSON metadata will be migrated to ComicInfo.xml files.";
 
 // Library
-"LIBRARY" = "Collection";
-"LIBRARY_SEARCH" = "Find in Collection";
+"LIBRARY" = "Library";
+"LIBRARY_SEARCH" = "Find in Library";
 "CATEGORY_SEARCH" = "Find in Category";
-"LIBRARY_EMPTY" = "Collection Empty";
+"LIBRARY_EMPTY" = "Library Empty";
 "LIBRARY_ADD_CONTENT" = "Add content from the browse tab.";
 "LIBRARY_ADJUST_FILTERS" = "Adjust your filters to see more content.";
-"ADD_TO_LIBRARY" = "Add to Collection";
-"REMOVE_FROM_LIBRARY" = "Remove from Collection";
+"ADD_TO_LIBRARY" = "Add to Library";
+"REMOVE_FROM_LIBRARY" = "Remove from Library";
 "MANGA_INFO" = "Manga Info";
 "SORT_BY" = "Sort By";
 "FILTER_BY" = "Filter By";
@@ -98,19 +98,19 @@
 "COVER" = "Cover";
 "LAYOUT_GRID" = "Grid";
 "LAYOUT_LIST" = "List";
-"REMOVING_(ONE)_ITEM_FROM_LIBRARY" = "Removing Item from Collection";
-"REMOVING_%i_ITEMS_FROM_LIBRARY" = "Removing %i Items from Collection";
+"REMOVING_(ONE)_ITEM_FROM_LIBRARY" = "Removing Item from Library";
+"REMOVING_%i_ITEMS_FROM_LIBRARY" = "Removing %i Items from Library";
 "REMOVING_(ONE)_ITEM_FROM_CATEGORY_%@" = "Removing Item from Category %@";
 "REMOVING_%i_ITEMS_FROM_CATEGORY_%@" = "Removing %i Items from Category %@";
-"REFRESHING_LIBRARY" = "Refreshing Collection…";
+"REFRESHING_LIBRARY" = "Refreshing Library…";
 "PROCESSING_ENTRIES" = "Processing Entries…";
 "REFRESH_NO_WIFI" = "Not Connected to Wi-Fi";
-"REFRESH_NO_WIFI_TEXT" = "The \"Only Update on Wi-Fi\" setting is enabled, so the collection cannot be refreshed until a Wi-Fi connection is available.";
+"REFRESH_NO_WIFI_TEXT" = "The \"Only Update on Wi-Fi\" setting is enabled, so the library cannot be refreshed until a Wi-Fi connection is available.";
 "REFRESH_ANYWAYS" = "Refresh Anyways";
-"REMOVE_FROM_LIBRARY_CONFIRM" = "Remove from Collection?";
-"REMOVE_FROM_LIBRARY_CONFIRM_TEXT" = "Removing this series from your collection will also remove all linked trackers. Are you sure you want to proceed?";
-"LIBRARY_REFRESH_INTERRUPTED" = "Collection Refresh Interrupted";
-"LIBRARY_REFRESH_INTERRUPTED_TEXT" = "The last collection refresh was interrupted before it was completed. Would you like to resume?";
+"REMOVE_FROM_LIBRARY_CONFIRM" = "Remove from Library?";
+"REMOVE_FROM_LIBRARY_CONFIRM_TEXT" = "Removing this series from your library will also remove all linked trackers. Are you sure you want to proceed?";
+"LIBRARY_REFRESH_INTERRUPTED" = "Library Refresh Interrupted";
+"LIBRARY_REFRESH_INTERRUPTED_TEXT" = "The last library refresh was interrupted before it was completed. Would you like to resume?";
 
 // Categories
 "ALL" = "All";
@@ -221,7 +221,7 @@
 // Local Source
 "LOCAL_FILES" = "Local Files";
 "LOCAL_FILES_TAGLINE" = "Read from local files";
-"LOCAL_FILES_INFO" = "The local files source allows you to upload and manage your own reading collection directly within Midoku.";
+"LOCAL_FILES_INFO" = "The local files source allows you to upload and manage your own reading library directly within Midoku.";
 "LOCAL_FILES_SETUP" = "Local Files Setup";
 "IMPORT" = "Import";
 "IMPORT_FILE" = "Import File";
@@ -344,7 +344,7 @@
 "MORE" = "more";
 "SOURCE_ORDER" = "Source Order";
 "MISSING_SOURCE" = "Missing Source";
-"MISSING_SOURCE_TEXT" = "The original source seems to be missing for this Manga. Please redownload it or remove this title from your collection.";
+"MISSING_SOURCE_TEXT" = "The original source seems to be missing for this Manga. Please redownload it or remove this title from your library.";
 "SELECT_CHAPTERS" = "Select Chapters";
 "SELECT_ALL" = "Select All";
 "DESELECT_ALL" = "Deselect All";
@@ -477,7 +477,7 @@
 "PIN_DISABLED" = "Disabled";
 "PIN_UNREAD" = "Unread";
 "PIN_UPDATED_CHAPTERS" = "Updated Chapters";
-"LIBRARY_UPDATING" = "Collection Updating";
+"LIBRARY_UPDATING" = "Library Updating";
 "UPDATE_INTERVAL" = "Update Interval";
 "SKIP_TITLES" = "Skip Titles";
 "ONLY_UPDATE_ON_WIFI" = "Only Update on Wi-Fi";
@@ -485,9 +485,9 @@
 "EXCLUDED_CATEGORIES" = "Excluded Categories";
 "REFRESH_METADATA" = "Refresh Metadata";
 "BACKGROUND_REFRESH" = "Background Refresh";
-"BACKGROUND_REFRESH_TEXT" = "When starting a collection refresh manually, allow the refresh to complete even if the app is backgrounded.";
+"BACKGROUND_REFRESH_TEXT" = "When starting a library refresh manually, allow the refresh to complete even if the app is backgrounded.";
 "NEW_CHAPTER_NOTIFICATIONS" = "New Chapter Notifications";
-"NEW_CHAPTER_NOTIFICATIONS_TEXT" = "Send notifications when the collection is refreshed in the background.";
+"NEW_CHAPTER_NOTIFICATIONS_TEXT" = "Send notifications when the library is refreshed in the background.";
 "1_NEW_CHAPTER_AVAILABLE" = "New chapter available";
 "X_NEW_CHAPTERS_AVAILABLE" = "%d new chapters available";
 "NEW_CHAPTERS_AVAILABLE" = "New Chapters Available";
@@ -681,7 +681,7 @@
 "RESTORE" = "Restore";
 "CREATE_BACKUP" = "Create Backup";
 "IMPORT_BACKUP" = "Import Backup";
-"LIBRARY_ENTRIES" = "Collection Entries";
+"LIBRARY_ENTRIES" = "Library Entries";
 "SENSITIVE_SETTINGS" = "Sensitive Settings";
 "NAME" = "Name";
 "DATE" = "Date";
@@ -704,21 +704,21 @@
 "CLEAR_NETWORK_CACHE_TEXT" = "This action is irreversible. Cached network requests and images will be cleared.";
 "CLEAR_READ_HISTORY" = "Clear Read History";
 "CLEAR_READ_HISTORY_TEXT" = "This action is irreversible. All read history will be removed.";
-"CLEAR_EXCLUDING_LIBRARY" = "Clear Read History Excluding Collection";
-"CLEAR_EXCLUDING_LIBRARY_TEXT" = "This action is irreversible. All read history excluding the collection will be removed.";
+"CLEAR_EXCLUDING_LIBRARY" = "Clear Read History Excluding Library";
+"CLEAR_EXCLUDING_LIBRARY_TEXT" = "This action is irreversible. All read history excluding the library will be removed.";
 "RESET_SETTINGS" = "Reset Settings";
 "RESET_SETTINGS_TEXT" = "This action is irreversible. All app and source settings will be reset.";
 "CLEAR_SOURCE_CACHE" = "Clear Source Cache";
 "CLEAR_SOURCE_CACHE_TEXT" = "Cached network data for the source url(s) will be cleared. This may result in temporarily increased loading times.";
 "PAGE_X_OF_X" = "Page %i of %i";
-"LIBRARY_LOCKED" = "Collection is locked.";
+"LIBRARY_LOCKED" = "Library is locked.";
 "CATEGORY_LOCKED" = "Category is locked.";
-"VIEW_LIBRARY" = "View Collection";
+"VIEW_LIBRARY" = "View Library";
 "CATEGORY_EMPTY" = "Category Empty";
 "AUTH_TO_OPEN" = "Authenticate to open.";
 "LOCKED_CATEGORIES" = "Locked Categories";
-"AUTH_FOR_LIBRARY" = "Authenticate to view collection.";
-"LOCK_LIBRARY" = "Lock Collection";
+"AUTH_FOR_LIBRARY" = "Authenticate to view library.";
+"LOCK_LIBRARY" = "Lock Library";
 "SET_AS_WIDE_PAGE" = "Set as Wide Page";
 "AUTOMATIC" = "Automatic";
 "SET_AS_NORMAL_PAGE" = "Set as Normal Page";
@@ -778,8 +778,8 @@
 "UNAVAILABLE_TRACKER_ITEM" = "Unavailable Tracker Item";
 "UNAVAILABLE_TRACKER_ITEM_INFO" = "This linked tracker item is associated with a tracker that is no longer available. You should either remove this item or log in to the associated tracker again.";
 "ENHANCED_TRACKERS" = "Enhanced Trackers";
-"ENHANCED_TRACKERS_INFO" = "Enhanced trackers can automatically link to items added to your collection from supported sources, tracking two-way reading history.";
-"ENHANCED_TRACKERS_TOGGLE_INFO" = "Disabling tracking for a source will remove all linked trackers, and enabling will automatically link all items in your collection.";
+"ENHANCED_TRACKERS_INFO" = "Enhanced trackers can automatically link to items added to your library from supported sources, tracking two-way reading history.";
+"ENHANCED_TRACKERS_TOGGLE_INFO" = "Disabling tracking for a source will remove all linked trackers, and enabling will automatically link all items in your library.";
 "TRACKER_LOGOUT_INFO" = "Logging out will remove linked tracking info from this tracker for all series.";
 
 "CACHE_SIZE_%@" = "Cache size: %@";
@@ -832,7 +832,7 @@
 "SHOW_ENTRY" = "Show Entry";
 
 "SOURCE_BREAKING_CHANGE" = "Source Breaking Change";
-"SOURCE_BREAKING_CHANGE_TEXT" = "This source had a breaking change and requires migration to keep your collection and history.";
+"SOURCE_BREAKING_CHANGE_TEXT" = "This source had a breaking change and requires migration to keep your library and history.";
 "UPLOAD_DATE" = "Upload Date";
 "ALL_CHAPTERS_READ" = "All Chapters Read";
 "ALL_CHAPTERS_LOCKED" = "All Chapters Locked";

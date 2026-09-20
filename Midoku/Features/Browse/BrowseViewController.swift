@@ -28,7 +28,8 @@ class BrowseViewController: BaseTableViewController {
 
         title = NSLocalizedString("BROWSE")
 
-        navigationController?.navigationBar.prefersLargeTitles = true
+        navigationController?.navigationBar.prefersLargeTitles = false
+        navigationItem.largeTitleDisplayMode = .never
         navigationItem.hidesSearchBarWhenScrolling = false
 
         // search controller

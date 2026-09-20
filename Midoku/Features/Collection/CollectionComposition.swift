@@ -179,19 +179,19 @@ struct MCSourceActions: View {
     var body: some View {
         Menu {
             if let id = store.entryID(for: manga) {
-                Button("Open collection entry", systemImage: "books.vertical") { openEntry = MCID(id: id) }
+                Button("Open library entry", systemImage: "books.vertical") { openEntry = MCID(id: id) }
             } else {
-                Button("Add to collection", systemImage: "plus") { add = true }
+                Button("Add to library", systemImage: "plus") { add = true }
             }
             Button(selected.isEmpty ? "Copy all chapters" : "Copy \(selected.count) selected chapters", systemImage: "doc.on.doc") {
                 store.copy(manga: manga, chapters: selected.isEmpty ? chapters : chapters.filter { selected.contains($0.key) })
                 copied = store.error == nil
             }.disabled(chapters.isEmpty)
         } label: { Image(systemName: "books.vertical") }
-            .accessibilityLabel("Collection actions")
+            .accessibilityLabel("Library actions")
             .sheet(isPresented: $add) { MCAddSourceView(manga: manga, chapters: chapters) }
             .sheet(item: $openEntry) { item in NavigationStack { MCEntryView(entryID: item.id) } }
-            .alert("Chapters copied", isPresented: $copied) { Button("OK") {} } message: { Text("Open a collection entry and choose Paste chapters.") }
+            .alert("Chapters copied", isPresented: $copied) { Button("OK") {} } message: { Text("Open a library entry and choose Paste chapters.") }
             .mcErrors(store)
     }
 }

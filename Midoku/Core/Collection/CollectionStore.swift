@@ -134,7 +134,7 @@ final class MCCollectionStore {
             snapshot = loaded
         } catch {
             writable = false
-            self.error = "Your collection could not be opened. Its saved file has been kept. \(error.localizedDescription)"
+            self.error = "Your library could not be opened. Its saved file has been kept. \(error.localizedDescription)"
         }
     }
 

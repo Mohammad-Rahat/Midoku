@@ -101,16 +101,16 @@ class TabBarController: UITabBarController {
             // this breaks the zoom transitions from the toolbar buttons in the backups setting page on ios 18 / ipads
             let hosting = UIHostingController(rootView: SettingsView().environmentObject(settingsPath))
             let entity = NavigationController(rootViewController: hosting)
-            entity.navigationBar.prefersLargeTitles = true
+            entity.navigationBar.prefersLargeTitles = false
             settingsPath.rootViewController = entity
             settingsViewController = entity
         }
         self.settingsPath = settingsPath
 
         // The collection hosts its native SwiftUI navigation stack.
-        browseViewController.navigationBar.prefersLargeTitles = true
-        historyViewController.navigationBar.prefersLargeTitles = true
-        searchViewController.navigationBar.prefersLargeTitles = true
+        browseViewController.navigationBar.prefersLargeTitles = false
+        historyViewController.navigationBar.prefersLargeTitles = false
+        searchViewController.navigationBar.prefersLargeTitles = false
 
         if #available(iOS 26.0, *) {
             let searchTab = UISearchTab { _ in
@@ -186,6 +186,10 @@ class TabBarController: UITabBarController {
         }
 
         let updateCount = AppSettings.browse.updateCount.get()
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--history-preview") { selectedIndex = 2 }
+        if ProcessInfo.processInfo.arguments.contains("--appearance-preview") { selectedIndex = 3 }
+        #endif
         browseViewController.tabBarItem.badgeValue = updateCount > 0 ? String(updateCount) : nil
 
         NotificationCenter.default.publisher(for: .init(AppSettings.general.incognitoMode.key))

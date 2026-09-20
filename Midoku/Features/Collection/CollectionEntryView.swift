@@ -18,6 +18,10 @@ struct MCEntryView: View {
     @State private var confirmReset = false
     @State private var confirmRemoveChapters = false
     @AppStorage("Midoku.chapterGrid") private var grid = false
+    @AppStorage("Appearance.chapterGridStyle") private var gridStyle = ChapterGridStyle.standard
+    @AppStorage("Appearance.chapterPortraitColumns") private var portraitColumns = 3
+    @AppStorage("Appearance.chapterLandscapeColumns") private var landscapeColumns = 5
+    @State private var viewportSize = CGSize.zero
     private var entry: MCPersonalEntry? { store.library.entry(entryID) }
     private var slots: [MCChapterSlot] {
         guard let entry else { return [] }
@@ -35,7 +39,8 @@ struct MCEntryView: View {
                                 Text("Copy chapters from a source, then paste them here.").foregroundStyle(.secondary).padding(.horizontal)
                             }
                             if grid {
-                                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), alignment: .leading, spacing: 18) {
+                                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top),
+                                    count: viewportSize.width > viewportSize.height ? min(10, max(2, landscapeColumns)) : min(6, max(2, portraitColumns))), alignment: .leading, spacing: 18) {
                                     ForEach(slots) { chapterRow($0, grid: true) }
                                 }.padding(.horizontal)
                             } else {
@@ -64,7 +69,7 @@ struct MCEntryView: View {
                             }
                             Button("Refresh sources", systemImage: "arrow.clockwise") { Task { await store.refresh(entryID: entryID) } }.disabled(store.isRefreshing)
                             Divider()
-                            Button("Remove from collection", systemImage: "trash", role: .destructive) { confirmRemove = true }
+                            Button("Remove from library", systemImage: "trash", role: .destructive) { confirmRemove = true }
                         } label: { Image(systemName: "ellipsis.circle") }.accessibilityLabel("Entry options")
                     }
                 }
@@ -76,7 +81,7 @@ struct MCEntryView: View {
         .sheet(isPresented: $showReorder) { MCChapterOrderView(entryID: entryID) }
         .sheet(item: $editingChapter) { MCChapterEditor(entryID: entryID, slotID: $0.id) }
         .fullScreenCover(item: $reader) { MCReaderView(sequence: $0.sequence).ignoresSafeArea() }
-        .confirmationDialog("Remove this entry from collection?", isPresented: $confirmRemove) {
+        .confirmationDialog("Remove this entry from library?", isPresented: $confirmRemove) {
             Button("Remove entry", role: .destructive) { if store.removeEntries([entryID]) { dismiss() } }
         } message: { Text("Reading history and downloaded chapters are kept.") }
         .confirmationDialog("Reset entry edits?", isPresented: $confirmReset) {
@@ -91,10 +96,13 @@ struct MCEntryView: View {
             }
         }
         .mcErrors(store)
+        .midokuAccent()
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { viewportSize = $0 }
         .onChange(of: slots.map(\.id)) { _, ids in selected.formIntersection(ids) }
-        .onAppear {
+        .task {
             #if DEBUG
             let args = ProcessInfo.processInfo.arguments
+            if args.contains("--collection-preview") { try? await Task.sleep(for: .milliseconds(750)) }
             if args.contains("--edit-preview") { showEdit = true }
             if args.contains("--paste-preview") { showPaste = true }
             if args.contains("--chapter-selection-preview") { grid = true; selecting = true; selected = Set(slots.prefix(2).map(\.id)) }
@@ -102,7 +110,7 @@ struct MCEntryView: View {
         }
         .task {
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("--reader-preview") {
+            if ProcessInfo.processInfo.arguments.contains("--reader-preview") || ProcessInfo.processInfo.arguments.contains("--reader-hidden-preview") {
                 await MCCollectionPreview.installReaderSources()
                 if let slot = slots.dropFirst().first { open(slot) }
             }
@@ -210,10 +218,21 @@ struct MCEntryView: View {
         if grid {
             VStack(alignment: .leading, spacing: 6) {
                 MCChapterThumbnail(variant: slot.preferred).aspectRatio(2/3, contentMode: .fit)
+                    .overlay(alignment: .bottomLeading) {
+                        if gridStyle == .compact, let variant = slot.preferred {
+                            Text(store.library.chapterDisplayTitle(variant)).font(.caption.weight(.semibold)).lineLimit(1)
+                                .foregroundStyle(.white).padding(.horizontal, 8).padding(.top, 24).padding(.bottom, 8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(LinearGradient(colors: [.clear, .black.opacity(0.85)], startPoint: .top, endPoint: .bottom))
+                        }
+                    }
                     .clipShape(RoundedRectangle(cornerRadius: 7))
                     .overlay(alignment: .topTrailing) { if selecting { selectionMark(slot).padding(6) } }
-                chapterText(slot, compact: true)
+                if gridStyle == .standard { chapterText(slot, compact: true) }
             }.opacity(store.library.isRead(slot) && !selecting ? 0.65 : 1)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(slot.preferred.map { store.library.chapterDisplayTitle($0) } ?? "Chapter")
+                .accessibilityAddTraits(selected.contains(slot.id) ? .isSelected : [])
         } else {
             HStack(spacing: 12) {
                 MCChapterThumbnail(variant: slot.preferred).frame(width: 48, height: 72).clipShape(RoundedRectangle(cornerRadius: 6))
@@ -235,11 +254,12 @@ struct MCEntryView: View {
         VStack(alignment: .leading, spacing: 4) {
             if let variant = slot.preferred, let chapter = store.library.chapter(variant.chapterID) {
                 Text(store.library.chapterDisplayTitle(variant)).font(compact ? .caption.weight(.semibold) : .subheadline.weight(.medium)).lineLimit(1)
-                if variant.edits.title == nil, !chapter.record.title.isEmpty && chapter.record.title != store.library.chapterDisplayTitle(variant) {
-                    Text(chapter.record.title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                let subtitle = variant.edits.title == nil && chapter.record.title != store.library.chapterDisplayTitle(variant) ? chapter.record.title : ""
+                if compact || !subtitle.isEmpty {
+                    Text(subtitle.isEmpty ? " " : subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
-                Text(store.sourceName(chapter.identity.listing.connectionID)).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                if slot.variants.count > 1 { Text("\(slot.variants.count) alternatives").font(.caption2).foregroundStyle(.tint) }
+                Text(store.sourceName(chapter.identity.listing.connectionID) + (slot.variants.count > 1 ? " · \(slot.variants.count) alternatives" : ""))
+                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             }
         }.frame(maxWidth: .infinity, alignment: .leading)
     }

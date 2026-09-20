@@ -79,8 +79,9 @@ class ReaderViewController: BaseObservingViewController {
     }
 
     private lazy var activityIndicator = UIActivityIndicatorView(style: .medium)
-    private lazy var toolbarView = ReaderToolbarView()
-    private var toolbarViewWidthConstraint: NSLayoutConstraint?
+    let controlsView = ReaderControlsView()
+    private var toolbarView: ReaderToolbarView { controlsView.toolbar }
+    private(set) var readerControlsVisible = true
 
     private var squeezeTimer: Timer?
     private var longSqueezeTimer: Timer?
@@ -196,77 +197,23 @@ class ReaderViewController: BaseObservingViewController {
         node.backgroundColor = .systemBackground
         navigationController?.navigationBar.prefersLargeTitles = false
 
-        // navbar buttons
-        navigationItem.leftBarButtonItems = [
-            UIBarButtonItem(
-                barButtonSystemItem: .close,
-                target: self,
-                action: #selector(close)
-            ),
-            UIBarButtonItem(
-                image: UIImage(systemName: "list.bullet"),
-                style: .plain,
-                target: self,
-                action: #selector(openChapterList)
-            )
-        ]
-        let moreButton = UIBarButtonItem(
-            image: UIImage(systemName: "safari"),
-            style: .plain,
-            target: self,
-            action: #selector(openWebView)
-        )
-        moreButton.isEnabled = chapter.url != nil
-        navigationItem.rightBarButtonItems = [
-            moreButton,
-            UIBarButtonItem(
-                image: UIImage(systemName: "textformat.size"),
-                style: .plain,
-                target: self,
-                action: #selector(openReaderSettings)
-            )
-        ]
-
-        // fix navbar being clear
-        let navigationBarAppearance = UINavigationBarAppearance()
-        let toolbarAppearance = UIToolbarAppearance()
-        navigationBarAppearance.configureWithDefaultBackground()
-        toolbarAppearance.configureWithDefaultBackground()
-        navigationController?.navigationBar.standardAppearance = navigationBarAppearance
-        navigationController?.navigationBar.compactAppearance = navigationBarAppearance
-        navigationController?.navigationBar.scrollEdgeAppearance = navigationBarAppearance
-        navigationController?.toolbar.standardAppearance = toolbarAppearance
-        navigationController?.toolbar.compactAppearance = toolbarAppearance
-        navigationController?.toolbar.scrollEdgeAppearance = toolbarAppearance
-
+        navigationController?.setNavigationBarHidden(true, animated: false)
+        navigationController?.isToolbarHidden = true
+        controlsView.closeButton.addTarget(self, action: #selector(close), for: .touchUpInside)
+        controlsView.chaptersButton.addTarget(self, action: #selector(openChapterList), for: .touchUpInside)
+        controlsView.settingsButton.addTarget(self, action: #selector(openReaderSettings), for: .touchUpInside)
+        controlsView.webButton.addTarget(self, action: #selector(openWebView), for: .touchUpInside)
         loadNavbarTitle()
 
-        // toolbar view
         toolbarView.sliderView.addTarget(self, action: #selector(sliderMoved(_:)), for: .valueChanged)
         toolbarView.sliderView.addTarget(self, action: #selector(sliderStopped(_:)), for: .editingDidEnd)
         toolbarView.previousChapterButton.addTarget(self, action: #selector(previousChapter), for: .touchUpInside)
         toolbarView.nextChapterButton.addTarget(self, action: #selector(nextChapter), for: .touchUpInside)
         updateChapterButtons()
-        toolbarView.translatesAutoresizingMaskIntoConstraints = false
-        let toolbarButtonItemView = UIBarButtonItem(customView: toolbarView)
-        toolbarButtonItemView.customView?.heightAnchor.constraint(equalToConstant: 44).isActive = true
-        if #available(iOS 26.0, *) {
-            toolbarViewWidthConstraint = toolbarButtonItemView.customView?.widthAnchor.constraint(
-                equalToConstant: node.bounds.width - 32 - 10
-            )
-            // shift down farther to account for different toolbar and slider knob size
-            toolbarButtonItemView.customView?.transform = CGAffineTransform(translationX: 0, y: -5)
-        } else {
-            toolbarViewWidthConstraint = toolbarButtonItemView.customView?.widthAnchor.constraint(equalToConstant: view.bounds.width)
-            toolbarButtonItemView.customView?.transform = CGAffineTransform(translationX: 0, y: -10)
-        }
-
         add(child: descriptionButtonController)
         view.addSubview(autoScrollButton)
-
-        toolbarItems = [toolbarButtonItemView]
-        navigationController?.isToolbarHidden = false
-        navigationController?.toolbar.fitContentViewToToolbar()
+        controlsView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(controlsView)
 
         // loading indicator
         activityIndicator.startAnimating()
@@ -312,7 +259,14 @@ class ReaderViewController: BaseObservingViewController {
     }
 
     override func constrain() {
-        toolbarViewWidthConstraint?.isActive = true
+        let panelWidth = controlsView.widthAnchor.constraint(equalTo: view.safeAreaLayoutGuide.widthAnchor, constant: -32)
+        panelWidth.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            panelWidth,
+            controlsView.widthAnchor.constraint(lessThanOrEqualToConstant: 600),
+            controlsView.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
+            controlsView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -8)
+        ])
 
         NSLayoutConstraint.activate([
             activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
@@ -432,13 +386,10 @@ class ReaderViewController: BaseObservingViewController {
         sessionStartDate = Date.now
         sessionLastInteraction = nil
 
-        if navigationController?.toolbar.alpha == 0 {
-            hideBars()
-        }
-
-        // there's a bug on ios 15 where the toolbar just disappears when adding a child hosting controller
-        navigationController?.isToolbarHidden = false
-        navigationController?.toolbar.alpha = 1
+        navigationController?.setNavigationBarHidden(true, animated: false)
+        navigationController?.isToolbarHidden = true
+        view.bringSubviewToFront(controlsView)
+        (navigationController as? ReaderNavigationController)?.prioritizeReaderBackGesture()
 
         disableSwipeGestures()
         configureNavigationBarDismissTapGesture(enabled: isDictionarySingleTapLookupActiveForCurrentChapter)
@@ -469,17 +420,7 @@ class ReaderViewController: BaseObservingViewController {
         }
     }
 
-    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
-        super.viewWillTransition(to: size, with: coordinator)
 
-        coordinator.animate(alongsideTransition: nil) { _ in
-            if #available(iOS 26.0, *) {
-                self.toolbarViewWidthConstraint?.constant = size.width - 32 - 10
-            } else {
-                self.toolbarViewWidthConstraint?.constant = size.width
-            }
-        }
-    }
 }
 
 extension ReaderViewController {
@@ -492,7 +433,7 @@ extension ReaderViewController {
         for recognizer in gestureRecognizers {
             switch String(describing: type(of: recognizer)) {
                 case "_UIParallaxTransitionPanGestureRecognizer": // swipe edge gesture
-                    recognizer.isEnabled = isVerticalReader
+                    recognizer.isEnabled = false // The reader owns a left-edge gesture for every reading mode.
 
                 case "_UIContentSwipeDismissGestureRecognizer": // swipe down gesture
                     recognizer.isEnabled = !isVerticalReader
@@ -616,6 +557,8 @@ extension ReaderViewController {
             }
 
         navigationItem.setTitle(upper: volume, lower: title)
+        controlsView.titleLabel.text = [volume, title].compactMap { $0 }.joined(separator: " · ")
+        controlsView.webButton.isEnabled = chapter.url != nil
         // re-apply theme title colors, since setTitle recreates the title view
         updateTextThemeOverride()
     }
@@ -802,6 +745,8 @@ extension ReaderViewController {
         configureDictionaryOverlayTapHandler()
         updateAutoScrollButton()
         disableSwipeGestures()
+        view.bringSubviewToFront(controlsView)
+        (navigationController as? ReaderNavigationController)?.prioritizeReaderBackGesture()
         updateTextThemeOverride()
     }
 
@@ -1449,7 +1394,7 @@ extension ReaderViewController {
 
         if let type {
             // hide the bars when tapping regardless
-            if let navigationController, navigationController.navigationBar.alpha > 0 {
+            if readerControlsVisible {
                 hideBars()
             }
             // handle page moving
@@ -1594,102 +1539,33 @@ extension ReaderViewController {
 // MARK: - Bar Visibility
 extension ReaderViewController {
     @objc func toggleBarVisibility() {
-        guard let navigationController else { return }
-        if !navigationController.navigationBar.isHidden {
-            hideBars()
-        } else {
-            showBars()
-        }
+        if readerControlsVisible { hideBars() } else { showBars() }
     }
 
-    func showBars() {
-        guard let navigationController else { return }
+    func showBars() { setReaderControlsVisible(true) }
+    func hideBars() { setReaderControlsVisible(false) }
 
-        if #available(iOS 27.0, *) {
-            navigationController.navigationBar.isHidden = true
-            navigationController.isNavigationBarHidden = false
-        }
-
-        UIView.animate(withDuration: CATransaction.animationDuration()) {
-            self.statusBarHidden = false
-            self.setNeedsStatusBarAppearanceUpdate()
-            self.setNeedsUpdateOfHomeIndicatorAutoHidden()
+    func setReaderControlsVisible(_ visible: Bool, animated: Bool = true) {
+        readerControlsVisible = visible
+        statusBarHidden = !visible
+        navigationController?.setNavigationBarHidden(true, animated: false)
+        navigationController?.isToolbarHidden = true
+        controlsView.isUserInteractionEnabled = visible
+        if visible { controlsView.isHidden = false }
+        setNeedsStatusBarAppearanceUpdate()
+        setNeedsUpdateOfHomeIndicatorAutoHidden()
+        NotificationCenter.default.post(name: visible ? .readerShowingBars : .readerHidingBars, object: nil)
+        UIView.animate(withDuration: animated ? 0.2 : 0, delay: 0, options: [.beginFromCurrentState]) {
+            self.controlsView.alpha = visible ? 1 : 0
+            self.node.backgroundColor = visible ? .systemBackground : {
+                switch UserDefaults.standard.string(forKey: "Reader.backgroundColor") {
+                case "system": UIColor.systemBackground
+                case "white": UIColor.white
+                default: UIColor.black
+                }
+            }()
         } completion: { _ in
-            NotificationCenter.default.post(name: .readerShowingBars, object: nil)
-
-            UIView.setAnimationsEnabled(false)
-            if #available(iOS 26.0, *) {
-                if navigationController.isToolbarHidden {
-                    (navigationController.value(forKey: "_floatingBarContainerView") as? UIView)?.alpha = 0
-                    navigationController.isToolbarHidden = false
-                }
-            } else {
-                if navigationController.toolbar.isHidden {
-                    navigationController.toolbar.alpha = 0
-                    navigationController.toolbar.isHidden = false
-                }
-            }
-            navigationController.navigationBar.isHidden = false
-            UIView.setAnimationsEnabled(true)
-            UIView.animate(withDuration: CATransaction.animationDuration()) {
-                navigationController.navigationBar.alpha = 1
-                navigationController.toolbar.alpha = 1
-                if #available(iOS 26.0, *) {
-                    (navigationController.value(forKey: "_floatingBarContainerView") as? UIView)?.alpha = 1
-                }
-                self.node.backgroundColor = if AppSettings.appearance.useSystemAppearance.get() {
-                    .systemBackground
-                } else {
-                    if AppSettings.appearance.appearance.get() == 0 {
-                        .white
-                    } else {
-                        .black
-                    }
-                }
-                self.node.layoutIfNeeded()
-            }
-        }
-    }
-
-    func hideBars() {
-        guard let navigationController else { return }
-
-        UIView.animate(withDuration: CATransaction.animationDuration()) {
-            self.statusBarHidden = true
-            self.setNeedsStatusBarAppearanceUpdate()
-            self.setNeedsUpdateOfHomeIndicatorAutoHidden()
-        } completion: { _ in
-            NotificationCenter.default.post(name: .readerHidingBars, object: nil)
-
-            UIView.animate(withDuration: CATransaction.animationDuration()) {
-                navigationController.navigationBar.alpha = 0
-                navigationController.toolbar.alpha = 0
-
-                if #available(iOS 26.0, *) {
-                    (navigationController.value(forKey: "_floatingBarContainerView") as? UIView)?.alpha = 0
-                }
-
-                self.node.backgroundColor = switch UserDefaults.standard.string(forKey: "Reader.backgroundColor") {
-                    case "system":
-                        .systemBackground
-                    case "white":
-                        .white
-                    default:
-                        .black
-                }
-                self.node.layoutIfNeeded()
-            } completion: { _ in
-                if #available(iOS 27.0, *) {
-                    navigationController.isNavigationBarHidden = true
-                } else {
-                    navigationController.navigationBar.isHidden = true
-                }
-                if #available(iOS 26.0, *) {
-                    navigationController.isToolbarHidden = true
-                } else {
-                    navigationController.toolbar.isHidden = true
-                }
-            }
+            self.controlsView.isHidden = !self.readerControlsVisible
         }
     }
 }
@@ -1713,7 +1589,7 @@ extension ReaderViewController: UIGestureRecognizerDelegate {
 
         var view: UIView? = touch.view
         while let currentView = view {
-            if currentView is UIControl {
+            if currentView is UIControl || currentView === controlsView {
                 return false
             }
             view = currentView.superview

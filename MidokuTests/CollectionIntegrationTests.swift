@@ -170,6 +170,34 @@ struct CollectionIntegrationTests {
         #expect(store.library.entry(entry)?.slots.count == 1)
     }
 
+    @Test func readerActionsStayBelowProgressAtPhoneWidths() {
+        for width in [288.0, 370.0, 600.0] {
+            let controls = ReaderControlsView()
+            controls.titleLabel.text = "Chapter 21"
+            controls.toolbar.totalPages = 25
+            controls.toolbar.currentPage = 1
+            controls.frame = CGRect(x: 0, y: 0, width: width, height: 130)
+            controls.layoutIfNeeded()
+            let slider = controls.toolbar.sliderView
+            let sliderFrame = slider.convert(slider.bounds, to: controls)
+            for button in [controls.closeButton, controls.chaptersButton, controls.settingsButton, controls.webButton] {
+                let frame = button.convert(button.bounds, to: controls)
+                #expect(frame.minY > sliderFrame.maxY)
+                #expect(frame.height >= 44 && frame.width >= 44)
+                #expect(frame.maxX <= controls.bounds.maxX)
+            }
+            #expect(controls.toolbar.hitTest(slider.center, with: nil) === slider)
+        }
+    }
+
+    @Test func readerBackSwipeRequiresIntentionalRightwardMovement() {
+        #expect(ReaderNavigationController.shouldCloseReader(translation: .init(x: 100, y: 5), velocity: .zero, width: 390))
+        #expect(ReaderNavigationController.shouldCloseReader(translation: .init(x: 20, y: 0), velocity: .init(x: 700, y: 0), width: 390))
+        #expect(!ReaderNavigationController.shouldCloseReader(translation: .init(x: 5, y: 0), velocity: .init(x: 700, y: 0), width: 390))
+        #expect(!ReaderNavigationController.shouldCloseReader(translation: .init(x: -100, y: 0), velocity: .init(x: -700, y: 0), width: 390))
+        #expect(!ReaderNavigationController.shouldCloseReader(translation: .init(x: 50, y: 0), velocity: .zero, width: 390))
+    }
+
 }
 
 private struct MCPageRoutingRunner: AidokuRunner.Runner {

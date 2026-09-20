@@ -57,8 +57,10 @@ struct MCCollectionRootView: View {
                 }
             }
             .background(Color(uiColor: .systemBackground))
-            .navigationTitle("Collection")
-            .searchable(text: $query, prompt: "Search collection")
+            .navigationTitle("Library")
+            .navigationBarTitleDisplayMode(.inline)
+            .customSearchable(text: $query, hidesSearchBarWhenScrolling: false, stacked: false)
+            .environment(\.autocorrectionDisabled, true)
             .toolbar {
                 if selecting {
                     ToolbarItem(placement: .topBarTrailing) { Button("Done") { selecting = false; selected.removeAll() } }
@@ -77,17 +79,17 @@ struct MCCollectionRootView: View {
                             Toggle("Cover grid", isOn: $grid)
                             Toggle("Chapter grid", isOn: $chapterGrid)
                             Button("Categories", systemImage: "folder") { showCategories = true }
-                            Button("Refresh collection", systemImage: "arrow.clockwise") { Task { await store.refresh() } }.disabled(store.isRefreshing)
+                            Button("Refresh library", systemImage: "arrow.clockwise") { Task { await store.refresh() } }.disabled(store.isRefreshing)
                             Divider()
-                            Button("Export collection", systemImage: "square.and.arrow.up") {
+                            Button("Export library", systemImage: "square.and.arrow.up") {
                                 do { document = MCCollectionDocument(data: try store.backupData()); showExport = true } catch { store.error = error.localizedDescription }
                             }
-                            Button("Import collection", systemImage: "square.and.arrow.down") { showImport = true }
-                        } label: { Image(systemName: "ellipsis.circle") }.accessibilityLabel("Collection options")
+                            Button("Import library", systemImage: "square.and.arrow.down") { showImport = true }
+                        } label: { Image(systemName: "ellipsis.circle") }.accessibilityLabel("Library options")
                     }
                 }
             }
-            .confirmationDialog("Remove \(selected.count) entries from collection?", isPresented: $confirmDelete) {
+            .confirmationDialog("Remove \(selected.count) entries from library?", isPresented: $confirmDelete) {
                 Button("Remove entries", role: .destructive) {
                     if store.removeEntries(selected) { selected.removeAll(); selecting = false }
                 }
@@ -98,7 +100,7 @@ struct MCCollectionRootView: View {
             .sheet(isPresented: $showAddPreview) {
                 if let manga = store.snapshot.manga.first?.manga { MCAddSourceView(manga: manga, chapters: []) }
             }
-            .fileExporter(isPresented: $showExport, document: document, contentType: .json, defaultFilename: "Midoku-collection") { result in
+            .fileExporter(isPresented: $showExport, document: document, contentType: .json, defaultFilename: "Midoku-library") { result in
                 if case .failure(let error) = result { store.error = error.localizedDescription }
             }
             .sheet(isPresented: $showImport) { MCImportCollectionView() }
@@ -112,16 +114,17 @@ struct MCCollectionRootView: View {
                 #if DEBUG
                 let args = ProcessInfo.processInfo.arguments
                 if args.contains("--collection-preview") {
+                    try? await Task.sleep(for: .milliseconds(750))
                     if args.contains("--add-preview") { showAddPreview = true }
                     if args.contains("--categories-preview") { showCategories = true }
                     if args.contains("--selection-preview") { selecting = true; selected = Set(store.library.entries.map(\.id)) }
-                    if !args.contains("--collection-preview-only"), args.contains("--entry-preview") || args.contains("--edit-preview") || args.contains("--paste-preview") || args.contains("--chapter-selection-preview") || args.contains("--reader-preview"), let id = MCCollectionPreview.entryID { path = [id] }
+                    if !args.contains("--collection-preview-only"), args.contains("--entry-preview") || args.contains("--edit-preview") || args.contains("--paste-preview") || args.contains(where: { $0.hasPrefix("--chapter-") }) || args.contains("--reader-preview") || args.contains("--reader-hidden-preview"), let id = MCCollectionPreview.entryID { path = [id] }
                     return
                 }
                 #endif
                 await store.adoptExistingLibrary()
             }
-        }
+        }.midokuAccent()
     }
 
     private var categoryTabs: some View {
@@ -162,18 +165,14 @@ struct MCCollectionRootView: View {
             case .custom: count = max(1, size.width > size.height ? landscapeColumns : portraitColumns)
             }
         }
-        return Array(repeating: GridItem(.flexible(), spacing: 12), count: count)
+        return Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: count)
     }
 
     @ViewBuilder private func collectionPage(category: UUID?, size: CGSize) -> some View {
         let values = entries(in: category)
         if values.isEmpty {
-            ContentUnavailableView {
-                Image("MidokuEmptyLibrary").resizable().scaledToFit().frame(width: 160, height: 130)
-                Text(query.isEmpty ? "Your collection" : "No matches")
-            } description: {
-                Text(query.isEmpty ? "Add a title from Browse, or create an entry." : "Try another title or category.")
-            } actions: { Button("Create entry") { showCreate = true } }
+            UnavailableView(query.isEmpty ? "Library Empty" : "No matches", systemImage: "books.vertical.fill",
+                description: Text(query.isEmpty ? "Add a title from Browse, or create an entry." : "Try another title or category."))
         } else {
             ScrollView {
                 LazyVGrid(columns: columns(for: size), alignment: .leading, spacing: grid ? 20 : 14) {
@@ -195,7 +194,7 @@ struct MCCollectionRootView: View {
                         .contextMenu {
                             Button("Edit entry", systemImage: "pencil") { editingEntry = MCID(id: entry.id) }
                             Button("Select entry", systemImage: "checkmark.circle") { selected.insert(entry.id); selecting = true }
-                            Button("Remove from collection", systemImage: "trash", role: .destructive) {
+                            Button("Remove from library", systemImage: "trash", role: .destructive) {
                                 selected = [entry.id]; confirmDelete = true
                             }
                         }
@@ -219,8 +218,8 @@ struct MCCollectionRootView: View {
         if grid {
             VStack(alignment: .leading, spacing: 7) {
                 MCEntryCover(entry: entry).aspectRatio(2/3, contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: 10))
-                Text(store.library.title(entry)).font(.subheadline.weight(.semibold)).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
-                Text("\(entry.slots.count) chapters · \(entry.status.title)").font(.caption).foregroundStyle(.secondary)
+                Text(store.library.title(entry)).font(.subheadline.weight(.semibold)).lineLimit(2, reservesSpace: true).frame(maxWidth: .infinity, alignment: .leading)
+                Text("\(entry.slots.count) chapters · \(entry.status.title)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
         } else {
             HStack(spacing: 14) {
@@ -263,7 +262,7 @@ struct MCCollectionDocument: FileDocument {
 
 extension View {
     func mcErrors(_ store: MCCollectionStore) -> some View {
-        alert("Collection", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
+        alert("Library", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
             Button("OK") { store.error = nil }
         } message: { Text(store.error ?? "") }
     }
@@ -279,17 +278,17 @@ struct MCImportCollectionView: View {
         NavigationStack {
             Form {
                 Section {
-                    Button("Choose collection backup") { picking = true }
+                    Button("Choose library backup") { picking = true }
                     if incoming != nil {
                         Text("\(count) entries ready to restore")
-                        Text("This replaces this app’s collection, including its categories, edits and clipboard. Downloads and source installations are kept.").foregroundStyle(.secondary)
-                        Button("Restore collection", role: .destructive) {
+                        Text("This replaces this app’s library, including its categories, edits and clipboard. Downloads and source installations are kept.").foregroundStyle(.secondary)
+                        Button("Restore library", role: .destructive) {
                             guard let incoming else { return }
                             do { try store.restore(incoming); dismiss() } catch { store.error = error.localizedDescription }
                         }
                     }
                 }
-            }.navigationTitle("Import collection").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            }.navigationTitle("Import library").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
                 .fileImporter(isPresented: $picking, allowedContentTypes: [.json]) { result in
                     do {
                         let url = try result.get(); let access = url.startAccessingSecurityScopedResource()

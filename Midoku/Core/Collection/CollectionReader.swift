@@ -82,7 +82,7 @@ extension ReaderViewController {
                     self?.present(alert, animated: true)
                 }
             }
-            if target == nil { action.subtitle = "Add this title to Collection first" }
+            if target == nil { action.subtitle = "Add this title to Library first" }
             return action
         }
     }
@@ -98,6 +98,12 @@ struct MCReaderView: UIViewControllerRepresentable {
             Task { @MainActor [weak reader] in
                 try? await Task.sleep(for: .seconds(1))
                 reader?.showBars()
+            }
+        }
+        if ProcessInfo.processInfo.arguments.contains("--reader-hidden-preview") {
+            Task { @MainActor [weak reader] in
+                try? await Task.sleep(for: .seconds(2))
+                reader?.hideBars()
             }
         }
         #endif

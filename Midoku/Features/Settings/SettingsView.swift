@@ -17,6 +17,7 @@ struct SettingsView: View {
 
     @State private var searchText: String = ""
     @State private var searchResult: SettingSearchResult?
+    @State private var showAppearancePreview = false
 
     @EnvironmentObject private var path: NavigationCoordinator
 
@@ -119,10 +120,23 @@ extension SettingsView {
         }
         .searchable(text: $searchText)
         .navigationTitle(NSLocalizedString("SETTINGS"))
+        .navigationBarTitleDisplayMode(.inline)
+        .midokuAccent()
+        .navigationDestination(isPresented: $showAppearancePreview) {
+            SettingPageDestination(setting: .init(title: "Appearance", value: .page(.init(items: Settings.appearanceSettings))),
+                value: .init(items: Settings.appearanceSettings, inlineTitle: true))
+                .settingCustomContent(customContentHandler)
+        }
         .onChange(of: searchText) { _ in
             search()
         }
         .task {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--appearance-preview") {
+                try? await Task.sleep(for: .milliseconds(750))
+                showAppearancePreview = true
+            }
+            #endif
             guard !categoriesLoaded else { return }
             await updateCategories()
         }
@@ -335,6 +349,10 @@ extension SettingsView {
     func customContentHandler(_ setting: Setting) -> some View {
         if setting.key == AppSettings.appearance.layout.key {
             LayoutSettingView()
+        } else if setting.key == AppSettings.appearance.accent.key {
+            MidokuAccentSettingView()
+        } else if setting.key == "Appearance.chapterLayout" {
+            MidokuChapterLayoutSettingView()
         } else if setting.key == AppSettings.library.defaultCategory.key {
             CategorySelectSettingView(setting: setting, categories: $categoriesOnly)
         } else if setting.key == AppSettings.library.lockedCategories.key {

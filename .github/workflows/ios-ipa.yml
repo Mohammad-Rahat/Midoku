@@ -56,10 +56,11 @@ jobs:
           xcrun simctl bootstatus "$device_id" -b
           xcrun simctl install "$device_id" "$app"
           mkdir -p build/screenshots
-          for screen in collection compact entry edit add paste selection chapter-selection categories reader; do
+          xcrun simctl ui "$device_id" appearance dark
+          for screen in collection empty history compact entry chapter-default chapter-compact chapter-clean chapter-selection appearance accent reader reader-hidden; do
             xcrun simctl terminate "$device_id" com.raahat.Midoku || true
             xcrun simctl launch "$device_id" com.raahat.Midoku --collection-preview "--$screen-preview"
-            sleep 3
+            sleep 8
             xcrun simctl io "$device_id" screenshot "build/screenshots/$screen.png"
           done
           xcrun simctl terminate "$device_id" com.raahat.Midoku || true

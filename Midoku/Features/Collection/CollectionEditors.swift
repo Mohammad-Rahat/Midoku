@@ -251,7 +251,7 @@ struct MCAddSourceView: View {
                     }
                     Button("Manage categories") { showCategories = true }
                 }
-            }.navigationTitle("Add to collection").navigationBarTitleDisplayMode(.inline)
+            }.navigationTitle("Add to library").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) { Button("Add") { save() }.disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }

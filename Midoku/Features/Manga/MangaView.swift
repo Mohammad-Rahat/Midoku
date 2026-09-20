@@ -118,6 +118,7 @@ struct MangaView: View {
                 refreshController.list = list
             }
             .navigationBarTitleDisplayMode(.inline)
+            .midokuAccent()
             .confirmationDialogOrAlert(
                 NSLocalizedString("REMOVE_ALL_DOWNLOADS"),
                 isPresented: $showRemoveAllConfirm,

@@ -203,6 +203,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
         Task {
             await SourceManager.shared.start()
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--collection-preview") { return }
+            #endif
             await BackupManager.shared.scheduleAutoBackup()
             if #available(iOS 18.0, *) {
                 DictionaryManager.shared.autoUpdateDictionaries()
@@ -296,6 +299,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
 extension AppDelegate {
     func performMigration() {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--collection-preview") { return }
+        #endif
         var settingsVersion = AppSettings.flags.currentVersion.get()
         let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
 

@@ -179,7 +179,7 @@ enum Settings {
 }
 
 extension Settings {
-    private static let appearanceSettings: [Setting] = [
+    static let appearanceSettings: [Setting] = [
         .init(value: .group(.init(items: [
             .init(
                 key: AppSettings.appearance.appearance.key,
@@ -194,6 +194,11 @@ extension Settings {
                 key: AppSettings.appearance.useSystemAppearance.key,
                 title: NSLocalizedString("USE_SYSTEM_APPEARANCE"),
                 value: .toggle(.init())
+            ),
+            .init(
+                key: AppSettings.appearance.accent.key,
+                title: "Accent color",
+                value: .custom
             )
         ]))),
         .init(
@@ -205,7 +210,10 @@ extension Settings {
                     value: .custom
                 )
             ]))
-        )
+        ),
+        .init(title: "Chapters", value: .group(.init(items: [
+            .init(key: "Appearance.chapterLayout", title: "Chapter layout", value: .custom)
+        ])))
     ]
 
     private static let librarySettings: [Setting] = [

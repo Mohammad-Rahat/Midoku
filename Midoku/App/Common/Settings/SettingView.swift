@@ -1347,6 +1347,7 @@ struct SettingPageDestination: View {
             }
         }
         .navigationTitle(hidePageNavbarTitle ? "" : setting.title)
+        .midokuAccent()
         .navigationBarTitleDisplayMode({
             let hasHeaderView = value.icon != nil && value.info != nil
             if hasHeaderView || (value.inlineTitle ?? false) {

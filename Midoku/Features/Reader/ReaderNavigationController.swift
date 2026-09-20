@@ -8,9 +8,10 @@
 import SwiftUI
 import AidokuRunner
 
-class ReaderNavigationController: UINavigationController {
+class ReaderNavigationController: UINavigationController, UIGestureRecognizerDelegate {
     let readerViewController: ReaderViewController
     let mangaInfo: MangaInfo?
+    private(set) lazy var readerBackGesture = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(handleReaderBack(_:)))
 
     init(readerViewController: ReaderViewController, mangaInfo: MangaInfo? = nil) {
         self.readerViewController = readerViewController
@@ -20,6 +21,48 @@ class ReaderNavigationController: UINavigationController {
 
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        readerBackGesture.edges = .left
+        readerBackGesture.delegate = self
+        view.addGestureRecognizer(readerBackGesture)
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        prioritizeReaderBackGesture()
+    }
+
+    func prioritizeReaderBackGesture() {
+        guard isViewLoaded, let reader = topViewController as? ReaderViewController, reader.isViewLoaded else { return }
+        func visit(_ view: UIView) {
+            for gesture in view.gestureRecognizers ?? [] where gesture is UIPanGestureRecognizer && gesture !== readerBackGesture {
+                gesture.require(toFail: readerBackGesture)
+            }
+            for child in view.subviews { visit(child) }
+        }
+        visit(reader.view)
+    }
+
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard gestureRecognizer === readerBackGesture, presentedViewController == nil,
+              let reader = topViewController as? ReaderViewController,
+              reader.presentedViewController == nil else { return false }
+        let velocity = readerBackGesture.velocity(in: view)
+        return velocity.x > 0 && velocity.x > abs(velocity.y)
+    }
+
+    static func shouldCloseReader(translation: CGPoint, velocity: CGPoint, width: CGFloat) -> Bool {
+        translation.x > max(80, width * 0.2) || (translation.x > 16 && velocity.x > 600)
+    }
+
+    @objc private func handleReaderBack(_ gesture: UIScreenEdgePanGestureRecognizer) {
+        guard gesture.state == .ended,
+              Self.shouldCloseReader(translation: gesture.translation(in: view), velocity: gesture.velocity(in: view), width: view.bounds.width)
+        else { return }
+        (topViewController as? ReaderViewController)?.close()
     }
 
     override var childForStatusBarHidden: UIViewController? {
