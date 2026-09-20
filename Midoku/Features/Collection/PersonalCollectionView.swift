@@ -146,7 +146,7 @@ struct MCCollectionRootView: View {
     private var groupPages: [MCLibraryGroupPage] {
         switch grouping {
         case .none:
-            []
+            return []
         case .category:
             var pages = store.snapshot.categories.map { category in
                 MCLibraryGroupPage(
@@ -187,8 +187,8 @@ struct MCCollectionRootView: View {
                 if connectionIDs.isEmpty { unavailable.insert(entry.id) }
                 for connectionID in connectionIDs { buckets[connectionID, default: []].insert(entry.id) }
             }
-            var pages = buckets.map { connectionID, entryIDs in
-                .init(id: "source:\(connectionID.uuidString)", title: store.sourceName(connectionID), entryIDs: entryIDs)
+            var pages: [MCLibraryGroupPage] = buckets.map { connectionID, entryIDs in
+                MCLibraryGroupPage(id: "source:\(connectionID.uuidString)", title: store.sourceName(connectionID), entryIDs: entryIDs)
             }.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
             if !unavailable.isEmpty {
                 pages.append(.init(id: "source:unavailable", title: "Unavailable source", entryIDs: unavailable))
