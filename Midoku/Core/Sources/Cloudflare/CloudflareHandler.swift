@@ -50,12 +50,56 @@ actor CloudflareHandler: NSObject {
 
     @MainActor
     private var parent: UIViewController? {
-        UIApplication.shared.appDelegate?.visibleViewController
+        let keyWindow = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .filter { $0.activationState == .foregroundActive }
+            .flatMap { $0.windows }
+            .first(where: \.isKeyWindow)
+            ?? UIApplication.shared.firstKeyWindow
+
+        return visibleViewController(from: keyWindow?.rootViewController)
     }
 
     @MainActor
-    private var parentView: UIView? {
-        parent?.view
+    private func visibleViewController(from viewController: UIViewController?) -> UIViewController? {
+        guard let viewController else { return nil }
+
+        if let presentedViewController = viewController.presentedViewController {
+            return visibleViewController(from: presentedViewController)
+        }
+        if let navigationController = viewController as? UINavigationController {
+            if let visibleViewController = navigationController.visibleViewController {
+                return visibleViewController(from: visibleViewController)
+            }
+            return navigationController
+        }
+        if let tabBarController = viewController as? UITabBarController {
+            if let selectedViewController = tabBarController.selectedViewController {
+                return visibleViewController(from: selectedViewController)
+            }
+            return tabBarController
+        }
+        if let splitViewController = viewController as? UISplitViewController {
+            if let lastViewController = splitViewController.viewControllers.last {
+                return visibleViewController(from: lastViewController)
+            }
+            return splitViewController
+        }
+
+        return viewController
+    }
+
+    @MainActor
+    private func waitForParent() async -> UIViewController? {
+        for attempt in 0..<20 {
+            if let parent {
+                return parent
+            }
+            if attempt < 19 {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
+        }
+        return nil
     }
 
     enum HandleError: Error {
@@ -162,7 +206,8 @@ extension CloudflareHandler {
     // add hidden web view to a visible view controller
     @MainActor
     private func addWebView(for request: URLRequest) async -> Bool {
-        guard let parentView else { return false }
+        guard let parent = await waitForParent() else { return false }
+        guard let parentView = parent.view else { return false }
 
         // match web view rendering mode with user agent
         let userAgent = request.value(forHTTPHeaderField: "User-Agent")
@@ -346,7 +391,7 @@ extension CloudflareHandler {
         // don't timeout while popup is shown
         await disableTimeout()
 
-        guard let parent else {
+        guard let parent = await waitForParent() else {
             await self.finishChallenge(with: .failure(HandleError.missingParentView))
             return
         }
