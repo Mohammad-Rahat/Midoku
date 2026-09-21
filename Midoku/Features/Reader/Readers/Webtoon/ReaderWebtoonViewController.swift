@@ -459,7 +459,11 @@ extension ReaderWebtoonViewController: UIContextMenuInteractionDelegate {
                 }
             }
 
-            let coverActions = self.delegate?.collectionCoverActions(image: image, chapterKey: node.page.chapterId) ?? []
+            let coverActions = self.delegate?.collectionCoverActions(
+                image: image,
+                chapterKey: node.page.chapterId,
+                imageURL: node.page.imageURL
+            ) ?? []
             return UIMenu(title: "", children: [shareAction, saveToPhotosAction, reloadAction] + coverActions)
         })
     }
