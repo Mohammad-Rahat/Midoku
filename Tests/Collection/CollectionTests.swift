@@ -146,4 +146,12 @@ struct CollectionTests {
         #expect(state.covers.isEmpty)
     }
 
+    @Test func remoteCoverURLsOnlyAcceptReusableWebLinks() {
+        #expect(MCRemoteCoverURL.parse(" https://images.example.com/page.jpg?token=abc ")?.host == "images.example.com")
+        #expect(MCRemoteCoverURL.parse("http://images.example.com/page.png") != nil)
+        #expect(MCRemoteCoverURL.parse("file:///tmp/page.jpg") == nil)
+        #expect(MCRemoteCoverURL.parse("javascript:alert(1)") == nil)
+        #expect(MCRemoteCoverURL.parse("not a url") == nil)
+    }
+
 }
