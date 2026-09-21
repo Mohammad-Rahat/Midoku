@@ -2,6 +2,28 @@ import AidokuRunner
 import PhotosUI
 import SwiftUI
 
+private struct MCRemoteCoverField: View {
+    @Binding var value: String
+    let loading: Bool
+    let use: () -> Void
+
+    var body: some View {
+        HStack {
+            TextField("Image URL", text: $value)
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .onSubmit(use)
+            if loading {
+                ProgressView()
+            } else {
+                Button("Use", action: use)
+                    .disabled(value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+    }
+}
+
 struct MCEntryEditor: View {
     let entryID: UUID?
     @Environment(\.dismiss) private var dismiss
@@ -13,6 +35,8 @@ struct MCEntryEditor: View {
     @State private var categories = Set<UUID>()
     @State private var photo: PhotosPickerItem?
     @State private var cover: MCLibraryCover?
+    @State private var coverURL = ""
+    @State private var loadingCoverURL = false
     @State private var clearCover = false
     @State private var showCategories = false
     @State private var loaded = false
@@ -30,6 +54,9 @@ struct MCEntryEditor: View {
                 Section("Cover") {
                     if let cover, let image = UIImage(data: cover.data) { Image(uiImage: image).resizable().scaledToFit().frame(height: 150) }
                     PhotosPicker("Choose cover", selection: $photo, matching: .images)
+                    MCRemoteCoverField(value: $coverURL, loading: loadingCoverURL) {
+                        Task { await useCoverURL() }
+                    }
                     Toggle("Hide cover", isOn: $clearCover)
                 }
                 Section("Categories") {
@@ -56,7 +83,7 @@ struct MCEntryEditor: View {
                 }
             }
             .onChange(of: photo) { _, photo in Task {
-                do { if let data = try await photo?.loadTransferable(type: Data.self) { cover = try store.saveCover(data: data); clearCover = false } }
+                do { if let data = try await photo?.loadTransferable(type: Data.self) { cover = try store.saveCover(data: data); clearCover = false; coverURL = "" } }
                 catch { store.error = error.localizedDescription }
             } }
             .sheet(isPresented: $showCategories) { MCCategoriesView() }
@@ -66,6 +93,25 @@ struct MCEntryEditor: View {
                 }
             } message: { Text("Restores entry details and cover. Chapter edits, categories and progress are kept.") }
             .mcErrors(store)
+        }
+    }
+
+    private var coverSource: AidokuRunner.Source? {
+        guard let entryID, let entry = store.library.entry(entryID),
+              let listing = store.library.listing(entry.primaryListingID) else { return nil }
+        return store.source(listing.identity.connectionID)
+    }
+
+    private func useCoverURL() async {
+        guard !loadingCoverURL else { return }
+        loadingCoverURL = true
+        defer { loadingCoverURL = false }
+        do {
+            cover = try await MCRemoteCoverLoader.load(coverURL, source: coverSource, store: store)
+            clearCover = false
+            photo = nil
+        } catch {
+            store.error = error.localizedDescription
         }
     }
 
@@ -99,6 +145,8 @@ struct MCChapterEditor: View {
     @State private var volume = ""
     @State private var cover: MCLibraryCover?
     @State private var photo: PhotosPickerItem?
+    @State private var coverURL = ""
+    @State private var loadingCoverURL = false
     @State private var loaded = false
     private var variant: MCChapterVariant? { store.library.entry(entryID)?.slots.first { $0.id == slotID }?.preferred }
     var body: some View {
@@ -108,6 +156,9 @@ struct MCChapterEditor: View {
                 TextField("Chapter number", text: $number).keyboardType(.decimalPad)
                 TextField("Volume", text: $volume)
                 PhotosPicker("Choose chapter thumbnail", selection: $photo, matching: .images)
+                MCRemoteCoverField(value: $coverURL, loading: loadingCoverURL) {
+                    Task { await useCoverURL() }
+                }
                 if let cover, let image = UIImage(data: cover.data) { Image(uiImage: image).resizable().scaledToFit().frame(height: 180) }
                 Button("Reset edits") { save(reset: true) }
             }.navigationTitle("Edit chapter").navigationBarTitleDisplayMode(.inline)
@@ -121,11 +172,29 @@ struct MCChapterEditor: View {
                     volume = variant.edits.volume ?? store.library.chapter(variant.chapterID)?.record.volume ?? ""
                 }
                 .onChange(of: photo) { _, photo in Task {
-                    do { if let data = try await photo?.loadTransferable(type: Data.self) { cover = try store.saveCover(data: data) } }
+                    do { if let data = try await photo?.loadTransferable(type: Data.self) { cover = try store.saveCover(data: data); coverURL = "" } }
                     catch { store.error = error.localizedDescription }
                 } }.mcErrors(store)
         }
     }
+
+    private var coverSource: AidokuRunner.Source? {
+        guard let variant, let chapter = store.library.chapter(variant.chapterID) else { return nil }
+        return store.source(chapter.identity.listing.connectionID)
+    }
+
+    private func useCoverURL() async {
+        guard !loadingCoverURL else { return }
+        loadingCoverURL = true
+        defer { loadingCoverURL = false }
+        do {
+            cover = try await MCRemoteCoverLoader.load(coverURL, source: coverSource, store: store)
+            photo = nil
+        } catch {
+            store.error = error.localizedDescription
+        }
+    }
+
     private func save(reset: Bool) {
         guard let variant else { return }
         if store.perform({ state in
@@ -228,6 +297,8 @@ struct MCAddSourceView: View {
     @State private var summary = ""
     @State private var photo: PhotosPickerItem?
     @State private var cover: MCLibraryCover?
+    @State private var coverURL = ""
+    @State private var loadingCoverURL = false
     @State private var loaded = false
     @State private var showCategories = false
     @Environment(\.dismiss) private var dismiss
@@ -244,6 +315,9 @@ struct MCAddSourceView: View {
                 Section("Cover") {
                     if let cover, let image = UIImage(data: cover.data) { Image(uiImage: image).resizable().scaledToFit().frame(height: 140) }
                     PhotosPicker("Choose cover", selection: $photo, matching: .images)
+                    MCRemoteCoverField(value: $coverURL, loading: loadingCoverURL) {
+                        Task { await useCoverURL() }
+                    }
                 }
                 Section("Categories") {
                     ForEach(store.snapshot.categories) { item in
@@ -263,13 +337,27 @@ struct MCAddSourceView: View {
                     if let name = AppSettings.library.defaultCategory.get(), let category = store.snapshot.categories.first(where: { $0.name == name }) { categories = [category.id] }
                 }
                 .onChange(of: photo) { _, value in Task {
-                    do { if let data = try await value?.loadTransferable(type: Data.self) { cover = try store.saveCover(data: data) } }
+                    do { if let data = try await value?.loadTransferable(type: Data.self) { cover = try store.saveCover(data: data); coverURL = "" } }
                     catch { store.error = error.localizedDescription }
                 } }
                 .sheet(isPresented: $showCategories) { MCCategoriesView() }
                 .mcErrors(store)
         }
     }
+
+    private func useCoverURL() async {
+        guard !loadingCoverURL else { return }
+        loadingCoverURL = true
+        defer { loadingCoverURL = false }
+        do {
+            let source = SourceStore.shared.source(for: manga.sourceKey)
+            cover = try await MCRemoteCoverLoader.load(coverURL, source: source, store: store)
+            photo = nil
+        } catch {
+            store.error = error.localizedDescription
+        }
+    }
+
     private func save() {
         do {
             let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
