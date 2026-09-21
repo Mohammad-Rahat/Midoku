@@ -90,6 +90,16 @@ nonisolated struct MCLibraryCover: Codable, Identifiable, Sendable {
     static func hash(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
 }
 
+nonisolated enum MCRemoteCoverURL {
+    static func parse(_ value: String) -> URL? {
+        let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, value.count <= 8192, let url = URL(string: value),
+              let scheme = url.scheme?.lowercased(), ["http", "https"].contains(scheme),
+              url.host?.isEmpty == false else { return nil }
+        return url
+    }
+}
+
 nonisolated struct MCLibraryUpdate: Codable, Identifiable, Sendable {
     var id = UUID()
     var entryID: UUID
@@ -335,7 +345,7 @@ nonisolated struct MCLibraryState: Codable, Sendable {
 }
 
 nonisolated enum MCLibraryFailure: Error, LocalizedError {
-    case missing, invalid, emptyTitle, stalePreview, unresolved, excluded, incomplete, cover
+    case missing, invalid, emptyTitle, stalePreview, unresolved, excluded, incomplete, cover, coverURL
     var errorDescription: String? {
         switch self {
         case .missing: "This item is no longer available. Reopen the entry and try again."
@@ -346,6 +356,7 @@ nonisolated enum MCLibraryFailure: Error, LocalizedError {
         case .excluded: "Confirm that you want to restore the previously removed chapter."
         case .incomplete: "The source did not return a complete chapter list. Existing chapters are kept; try again."
         case .cover: "Choose a valid image under 20 MB. The previous cover has been kept."
+        case .coverURL: "Enter a valid HTTP or HTTPS image URL."
         }
     }
 }

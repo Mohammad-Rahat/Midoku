@@ -60,14 +60,21 @@ struct MCReaderSheet: Identifiable {
 }
 
 extension ReaderViewController {
-    func collectionCoverActions(image: UIImage, chapterKey: String) -> [UIAction] {
+    func collectionCoverActions(image: UIImage, chapterKey: String, imageURL: String?) -> [UIAction] {
         let store = MCCollectionStore.shared
         let route = collectionSequence?.route(key: chapterKey)
         let identity = route?.identifier ?? ChapterIdentifier(sourceKey: manga.sourceKey, mangaKey: manga.key, chapterKey: chapterKey)
         let target = collectionSequence != nil && route == nil ? nil : store.coverTarget(identifier: identity, entryID: collectionSequence?.entryID,
                                       variantID: collectionSequence == nil ? nil : UUID(uuidString: chapterKey))
         // Freeze the pressed page's target. Infinite scrolling may already be displaying another chapter.
-        return [false, true].map { forEntry in
+        var actions: [UIAction] = []
+        if let imageURL, let url = MCRemoteCoverURL.parse(imageURL) {
+            actions.append(UIAction(title: "Copy URL", image: UIImage(systemName: "doc.on.doc")) { _ in
+                UIPasteboard.general.string = url.absoluteString
+                UISelectionFeedbackGenerator().selectionChanged()
+            })
+        }
+        actions += [false, true].map { forEntry in
             let action = UIAction(title: forEntry ? "Set as entry cover" : "Set as chapter cover",
                                   image: UIImage(systemName: forEntry ? "book.closed" : "photo"),
                                   attributes: target == nil ? .disabled : []) { [weak self] _ in
@@ -85,6 +92,7 @@ extension ReaderViewController {
             if target == nil { action.subtitle = "Add this title to Library first" }
             return action
         }
+        return actions
     }
 }
 
