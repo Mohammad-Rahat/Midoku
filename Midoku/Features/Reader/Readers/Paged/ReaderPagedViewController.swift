@@ -1314,7 +1314,11 @@ extension ReaderPagedViewController: UIContextMenuInteractionDelegate {
             var actions = [shareAction, saveToPhotosAction, reloadAction]
             if let image = pageView.image,
                let page = self.pageViewControllers.first(where: { $0.pageView?.imageView == pageView })?.page {
-                actions += self.delegate?.collectionCoverActions(image: image, chapterKey: page.chapterId) ?? []
+                actions += self.delegate?.collectionCoverActions(
+                    image: image,
+                    chapterKey: page.chapterId,
+                    imageURL: page.imageURL
+                ) ?? []
             }
 
             if self.usesDoublePages {
